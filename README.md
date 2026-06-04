@@ -25,6 +25,13 @@ Service URLs:
 
 ## First Checks
 
+Backend tests use an isolated in-memory database. They do not require the local Compose PostgreSQL service.
+
+```bash
+cd backend
+./mvnw test
+```
+
 Backend health:
 
 ```bash
