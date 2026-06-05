@@ -19,6 +19,32 @@ export type Position = {
   approvalRank: number
 }
 
+export type FormDefinitionSummary = {
+  formCode: string
+  formName: string
+  workflowCode: string
+  workflowName: string
+  fieldCount: number
+}
+
+export type FormField = {
+  fieldKey: string
+  label: string
+  dataType: string
+  required: boolean
+  placeholder: string | null
+  initialValueType: string
+  displayOrder: number
+}
+
+export type FormDefinitionDetail = {
+  formCode: string
+  formName: string
+  workflowCode: string
+  workflowName: string
+  fields: FormField[]
+}
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path)
 
@@ -39,4 +65,12 @@ export function getOrganizations() {
 
 export function getPositions() {
   return getJson<Position[]>('/api/master-data/positions')
+}
+
+export function getFormDefinitions() {
+  return getJson<FormDefinitionSummary[]>('/api/form-definitions')
+}
+
+export function getFormDefinition(formCode: string) {
+  return getJson<FormDefinitionDetail>(`/api/form-definitions/${formCode}`)
 }

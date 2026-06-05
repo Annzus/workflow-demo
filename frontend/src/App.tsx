@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import {
   BadgeCheck,
   Bell,
@@ -11,7 +12,14 @@ import {
 } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import './App.css'
-import { getEmployees, getOrganizations, getPositions } from './api'
+import {
+  type FormField,
+  getEmployees,
+  getFormDefinition,
+  getFormDefinitions,
+  getOrganizations,
+  getPositions,
+} from './api'
 
 const applications = [
   {
@@ -47,7 +55,25 @@ const navItems = [
   { label: '設定', icon: Settings },
 ]
 
+function previewFieldType(field: FormField) {
+  if (field.dataType === 'TEXTAREA') {
+    return <textarea className="preview-input" placeholder={field.placeholder ?? ''} readOnly />
+  }
+
+  const inputType =
+    field.dataType === 'NUMBER'
+      ? 'number'
+      : field.dataType === 'DATE'
+        ? 'date'
+        : field.dataType === 'MONTH'
+          ? 'month'
+          : 'text'
+
+  return <input className="preview-input" placeholder={field.placeholder ?? ''} readOnly type={inputType} />
+}
+
 function App() {
+  const [selectedFormCode, setSelectedFormCode] = useState<string>()
   const employeesQuery = useQuery({
     queryKey: ['employees'],
     queryFn: getEmployees,
@@ -60,10 +86,21 @@ function App() {
     queryKey: ['positions'],
     queryFn: getPositions,
   })
+  const formDefinitionsQuery = useQuery({
+    queryKey: ['formDefinitions'],
+    queryFn: getFormDefinitions,
+  })
 
   const employees = employeesQuery.data ?? []
   const organizations = organizationsQuery.data ?? []
   const positions = positionsQuery.data ?? []
+  const formDefinitions = formDefinitionsQuery.data ?? []
+  const activeFormCode = selectedFormCode ?? formDefinitions[0]?.formCode
+  const selectedFormQuery = useQuery({
+    queryKey: ['formDefinition', activeFormCode],
+    queryFn: () => getFormDefinition(activeFormCode ?? ''),
+    enabled: Boolean(activeFormCode),
+  })
   const isMasterDataLoading =
     employeesQuery.isLoading || organizationsQuery.isLoading || positionsQuery.isLoading
   const hasMasterDataError =
@@ -89,6 +126,12 @@ function App() {
     : positionsQuery.isLoading
       ? '読込中'
       : `${positions.length}件`
+  const formDefinitionCountLabel = formDefinitionsQuery.isError
+    ? '取得エラー'
+    : formDefinitionsQuery.isLoading
+      ? '読込中'
+      : `${formDefinitions.length}件`
+  const selectedForm = selectedFormQuery.data
 
   return (
     <main className="app-shell">
@@ -189,6 +232,82 @@ function App() {
               <div className="flow-node">課長</div>
               <div className="flow-line" />
               <div className="flow-node final">部長</div>
+            </div>
+          </article>
+        </section>
+
+        <section className="definition-grid" aria-label="申請書定義">
+          <article className="panel definition-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">申請書定義</p>
+                <h2>申請フォーム設定</h2>
+              </div>
+              <span className="count-label">{formDefinitionCountLabel}</span>
+            </div>
+
+            <div className="definition-layout">
+              <div className="definition-list" aria-label="申請書定義一覧">
+                {formDefinitionsQuery.isError ? (
+                  <div className="compact-row compact-row-muted">申請書定義を取得できません</div>
+                ) : (
+                  formDefinitions.map((formDefinition) => (
+                    <button
+                      className={
+                        activeFormCode === formDefinition.formCode
+                          ? 'definition-option active'
+                          : 'definition-option'
+                      }
+                      key={formDefinition.formCode}
+                      onClick={() => setSelectedFormCode(formDefinition.formCode)}
+                      type="button"
+                    >
+                      <strong>{formDefinition.formName}</strong>
+                      <span>{formDefinition.formCode}</span>
+                      <small>{formDefinition.workflowName}</small>
+                      <em>{formDefinition.fieldCount}項目</em>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="definition-detail">
+                {selectedFormQuery.isError ? (
+                  <div className="compact-row compact-row-muted">選択中の申請書定義を取得できません</div>
+                ) : (
+                  <>
+                    <div className="definition-title">
+                      <div>
+                        <span>{selectedForm?.formCode ?? '---'}</span>
+                        <h3>{selectedForm?.formName ?? '申請書を選択'}</h3>
+                      </div>
+                      <small>{selectedForm?.workflowName ?? 'ワークフロー未選択'}</small>
+                    </div>
+
+                    <div className="field-list">
+                      {(selectedForm?.fields ?? []).map((field) => (
+                        <div className="field-row" key={field.fieldKey}>
+                          <strong>{field.label}</strong>
+                          <span>{field.dataType}</span>
+                          <span>{field.required ? '必須' : '任意'}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="form-preview-grid" aria-label="申請フォームプレビュー">
+                      {(selectedForm?.fields ?? []).slice(0, 4).map((field) => (
+                        <label className="preview-field" key={field.fieldKey}>
+                          <span>
+                            {field.label}
+                            {field.required ? <em>必須</em> : null}
+                          </span>
+                          {previewFieldType(field)}
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </article>
         </section>

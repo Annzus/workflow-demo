@@ -206,6 +206,10 @@ h2 {
   gap: 14px;
 }
 
+.definition-grid {
+  margin-top: 14px;
+}
+
 .master-grid {
   margin-top: 14px;
   display: grid;
@@ -319,6 +323,165 @@ h2 {
   background: #9cad9d;
 }
 
+.definition-layout {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.56fr) minmax(0, 1.44fr);
+  gap: 14px;
+}
+
+.definition-list {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.definition-option {
+  min-height: 82px;
+  padding: 12px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  background: #fbfcfb;
+  color: #17201b;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.definition-option:hover,
+.definition-option.active {
+  border-color: #78906f;
+  background: #f4f8ee;
+}
+
+.definition-option strong,
+.definition-option span,
+.definition-option small,
+.definition-option em {
+  display: block;
+}
+
+.definition-option strong {
+  font-size: 14px;
+}
+
+.definition-option span,
+.definition-option small {
+  color: #5b6f60;
+  font-size: 12px;
+}
+
+.definition-option em {
+  color: #334313;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.definition-detail {
+  min-width: 0;
+  border: 1px solid #dfe5df;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 14px;
+}
+
+.definition-title {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.definition-title span,
+.definition-title small {
+  color: #5b6f60;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.definition-title h3 {
+  margin: 3px 0 0;
+  color: #17201b;
+  font-size: 18px;
+}
+
+.field-list {
+  margin-top: 14px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.field-row {
+  min-height: 38px;
+  padding: 0 12px;
+  border-top: 1px solid #dfe5df;
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 96px 72px;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.field-row:first-child {
+  border-top: 0;
+}
+
+.field-row strong {
+  color: #17201b;
+}
+
+.field-row span {
+  color: #5b6f60;
+}
+
+.form-preview-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.preview-field {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.preview-field span {
+  color: #334139;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.preview-field em {
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: #334313;
+  background: #e7f2d0;
+  font-size: 11px;
+  font-style: normal;
+}
+
+.preview-input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid #cfd8d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #17201b;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+textarea.preview-input {
+  min-height: 76px;
+}
+
 .compact-list {
   margin-top: 16px;
   display: grid;
@@ -362,6 +525,8 @@ h2 {
 
   .summary-grid,
   .content-grid,
+  .definition-layout,
+  .form-preview-grid,
   .master-grid {
     grid-template-columns: 1fr;
   }
