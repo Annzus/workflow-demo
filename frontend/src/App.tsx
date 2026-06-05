@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import {
   BadgeCheck,
   Bell,
@@ -10,9 +10,10 @@ import {
   Settings,
   Users,
 } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import './App.css'
 import {
+  createDraftApplication,
   type FormField,
   getEmployees,
   getFormDefinition,
@@ -72,8 +73,23 @@ function previewFieldType(field: FormField) {
   return <input className="preview-input" placeholder={field.placeholder ?? ''} readOnly type={inputType} />
 }
 
+function editorInputType(field: FormField) {
+  if (field.dataType === 'NUMBER') {
+    return 'number'
+  }
+  if (field.dataType === 'DATE') {
+    return 'date'
+  }
+  if (field.dataType === 'MONTH') {
+    return 'month'
+  }
+  return 'text'
+}
+
 function App() {
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
+  const [applicationTitle, setApplicationTitle] = useState('')
+  const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const employeesQuery = useQuery({
     queryKey: ['employees'],
     queryFn: getEmployees,
@@ -132,6 +148,36 @@ function App() {
       ? '読込中'
       : `${formDefinitions.length}件`
   const selectedForm = selectedFormQuery.data
+  const createDraftMutation = useMutation({
+    mutationFn: createDraftApplication,
+  })
+
+  useEffect(() => {
+    setApplicationTitle('')
+    setDraftValues({})
+    createDraftMutation.reset()
+  }, [activeFormCode])
+
+  function updateDraftValue(fieldKey: string, value: string) {
+    setDraftValues((currentValues) => ({
+      ...currentValues,
+      [fieldKey]: value,
+    }))
+  }
+
+  function submitDraftApplication(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!activeFormCode || !applicationTitle.trim()) {
+      return
+    }
+
+    createDraftMutation.mutate({
+      formCode: activeFormCode,
+      title: applicationTitle,
+      values: draftValues,
+    })
+  }
 
   return (
     <main className="app-shell">
@@ -233,6 +279,93 @@ function App() {
               <div className="flow-line" />
               <div className="flow-node final">部長</div>
             </div>
+          </article>
+        </section>
+
+        <section className="draft-grid" aria-label="新規申請">
+          <article className="panel draft-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">新規申請</p>
+                <h2>申請フォーム入力</h2>
+              </div>
+              <span className="count-label">DRAFT</span>
+            </div>
+
+            <form className="draft-layout" onSubmit={submitDraftApplication}>
+              <div className="draft-meta">
+                <label className="draft-field">
+                  <span>申請書</span>
+                  <select
+                    value={activeFormCode ?? ''}
+                    onChange={(event) => setSelectedFormCode(event.target.value)}
+                  >
+                    {formDefinitions.map((formDefinition) => (
+                      <option key={formDefinition.formCode} value={formDefinition.formCode}>
+                        {formDefinition.formName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="draft-field">
+                  <span>件名</span>
+                  <input
+                    required
+                    placeholder="例：東京本社への出張申請"
+                    value={applicationTitle}
+                    onChange={(event) => setApplicationTitle(event.target.value)}
+                  />
+                </label>
+
+                <div className="draft-status-box">
+                  <strong>{selectedForm?.workflowName ?? 'ワークフロー未選択'}</strong>
+                  <span>申請者：山田 太郎</span>
+                  <span>保存後ステータス：DRAFT</span>
+                </div>
+              </div>
+
+              <div className="draft-form">
+                {(selectedForm?.fields ?? []).map((field) => (
+                  <label className="draft-field" key={field.fieldKey}>
+                    <span>
+                      {field.label}
+                      {field.required ? <em>必須</em> : null}
+                    </span>
+                    {field.dataType === 'TEXTAREA' ? (
+                      <textarea
+                        placeholder={field.placeholder ?? ''}
+                        required={field.required}
+                        value={draftValues[field.fieldKey] ?? ''}
+                        onChange={(event) => updateDraftValue(field.fieldKey, event.target.value)}
+                      />
+                    ) : (
+                      <input
+                        placeholder={field.placeholder ?? ''}
+                        required={field.required}
+                        type={editorInputType(field)}
+                        value={draftValues[field.fieldKey] ?? ''}
+                        onChange={(event) => updateDraftValue(field.fieldKey, event.target.value)}
+                      />
+                    )}
+                  </label>
+                ))}
+              </div>
+
+              <div className="draft-actions">
+                {createDraftMutation.isError ? (
+                  <span className="draft-message error">申請を保存できません</span>
+                ) : null}
+                {createDraftMutation.data ? (
+                  <span className="draft-message">
+                    {createDraftMutation.data.applicationNumber} を保存しました
+                  </span>
+                ) : null}
+                <button className="primary-button" disabled={!activeFormCode || createDraftMutation.isPending}>
+                  {createDraftMutation.isPending ? '保存中' : '下書き保存'}
+                </button>
+              </div>
+            </form>
           </article>
         </section>
 

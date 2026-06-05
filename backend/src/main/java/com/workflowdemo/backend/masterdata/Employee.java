@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "employees")
-class Employee {
+public class Employee {
 
     @Id
     private UUID id;
@@ -36,15 +36,15 @@ class Employee {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    UUID getId() {
+    public UUID getId() {
         return id;
     }
 
-    String getEmployeeCode() {
+    public String getEmployeeCode() {
         return employeeCode;
     }
 
-    String getName() {
+    public String getName() {
         return name;
     }
 

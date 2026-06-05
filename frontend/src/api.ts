@@ -45,6 +45,23 @@ export type FormDefinitionDetail = {
   fields: FormField[]
 }
 
+export type CreateDraftApplicationRequest = {
+  formCode: string
+  title: string
+  values: Record<string, string>
+}
+
+export type DraftApplication = {
+  applicationNumber: string
+  title: string
+  status: string
+  applicantName: string
+  formName: string
+  fieldValueCount: number
+}
+
+const DEMO_AUTHORIZATION_HEADER = `Basic ${btoa('demo1@growtea.co.jp:demo1001')}`
+
 async function getJson<T>(path: string): Promise<T> {
   const response = await fetch(path)
 
@@ -53,6 +70,27 @@ async function getJson<T>(path: string): Promise<T> {
   }
 
   return response.json() as Promise<T>
+}
+
+async function postJson<TResponse, TBody>(
+  path: string,
+  body: TBody,
+  options: { authorization?: string } = {},
+): Promise<TResponse> {
+  const response = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.authorization ? { Authorization: options.authorization } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+
+  return response.json() as Promise<TResponse>
 }
 
 export function getEmployees() {
@@ -73,4 +111,10 @@ export function getFormDefinitions() {
 
 export function getFormDefinition(formCode: string) {
   return getJson<FormDefinitionDetail>(`/api/form-definitions/${formCode}`)
+}
+
+export function createDraftApplication(request: CreateDraftApplicationRequest) {
+  return postJson<DraftApplication, CreateDraftApplicationRequest>('/api/applications/drafts', request, {
+    authorization: DEMO_AUTHORIZATION_HEADER,
+  })
 }

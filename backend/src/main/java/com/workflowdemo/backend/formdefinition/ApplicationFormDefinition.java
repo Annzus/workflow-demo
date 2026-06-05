@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "application_form_definitions")
-class ApplicationFormDefinition {
+public class ApplicationFormDefinition {
 
     @Id
     private UUID id;
@@ -30,15 +30,15 @@ class ApplicationFormDefinition {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    UUID getId() {
+    public UUID getId() {
         return id;
     }
 
-    String getFormCode() {
+    public String getFormCode() {
         return formCode;
     }
 
-    String getFormName() {
+    public String getFormName() {
         return formName;
     }
 

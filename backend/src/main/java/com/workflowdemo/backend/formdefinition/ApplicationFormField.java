@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "application_form_fields")
-class ApplicationFormField {
+public class ApplicationFormField {
 
     @Id
     private UUID id;
@@ -48,23 +48,23 @@ class ApplicationFormField {
         return id;
     }
 
-    UUID getFormDefinitionId() {
+    public UUID getFormDefinitionId() {
         return formDefinitionId;
     }
 
-    String getFieldKey() {
+    public String getFieldKey() {
         return fieldKey;
     }
 
-    String getLabel() {
+    public String getLabel() {
         return label;
     }
 
-    String getDataType() {
+    public String getDataType() {
         return dataType;
     }
 
-    boolean isRequired() {
+    public boolean isRequired() {
         return required;
     }
 
@@ -76,7 +76,7 @@ class ApplicationFormField {
         return initialValueType;
     }
 
-    int getDisplayOrder() {
+    public int getDisplayOrder() {
         return displayOrder;
     }
 

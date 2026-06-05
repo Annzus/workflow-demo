@@ -6,7 +6,7 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-interface ApplicationFormDefinitionRepository extends JpaRepository<ApplicationFormDefinition, UUID> {
+public interface ApplicationFormDefinitionRepository extends JpaRepository<ApplicationFormDefinition, UUID> {
 
     List<ApplicationFormDefinition> findByActiveTrueOrderByFormCodeAsc();
 
