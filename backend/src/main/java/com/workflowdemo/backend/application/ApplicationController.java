@@ -2,6 +2,9 @@ package com.workflowdemo.backend.application;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinition;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinitionRepository;
@@ -16,6 +19,8 @@ import jakarta.validation.constraints.NotEmpty;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,14 +54,51 @@ class ApplicationController {
         this.fieldValueRepository = fieldValueRepository;
     }
 
+    @GetMapping
+    @Transactional(readOnly = true)
+    List<ApplicationSummaryResponse> applications() {
+        Employee applicant = demoApplicant();
+        List<WorkflowApplication> applications =
+            applicationRepository.findByApplicantEmployeeIdOrderByCreatedAtDesc(applicant.getId());
+        Map<UUID, ApplicationFormDefinition> formsById = formDefinitionRepository.findAllById(
+                applications.stream()
+                    .map(WorkflowApplication::getFormDefinitionId)
+                    .toList()
+            )
+            .stream()
+            .collect(Collectors.toMap(ApplicationFormDefinition::getId, Function.identity()));
+
+        return applications.stream()
+            .map(application -> ApplicationSummaryResponse.from(
+                application,
+                formsById.get(application.getFormDefinitionId()),
+                applicant
+            ))
+            .toList();
+    }
+
+    @GetMapping("/{id}")
+    @Transactional(readOnly = true)
+    ApplicationDetailResponse application(@PathVariable UUID id) {
+        Employee applicant = demoApplicant();
+        WorkflowApplication application = applicationRepository.findById(id)
+            .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+        ApplicationFormDefinition formDefinition = formDefinitionRepository.findById(application.getFormDefinitionId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
+        List<ApplicationFieldValue> fieldValues =
+            fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
+
+        return ApplicationDetailResponse.from(application, formDefinition, applicant, fieldValues);
+    }
+
     @PostMapping("/drafts")
     @ResponseStatus(HttpStatus.CREATED)
     @Transactional
     DraftApplicationResponse createDraft(@Valid @RequestBody CreateDraftApplicationRequest request) {
         ApplicationFormDefinition formDefinition = formDefinitionRepository.findByFormCodeAndActiveTrue(request.formCode())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
-        Employee applicant = employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPLICANT_EMPLOYEE_CODE)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo applicant not found"));
+        Employee applicant = demoApplicant();
         List<ApplicationFormField> fields =
             formFieldRepository.findByFormDefinitionIdAndActiveTrueOrderByDisplayOrderAsc(formDefinition.getId());
 
@@ -75,6 +117,7 @@ class ApplicationController {
         fieldValueRepository.saveAll(fieldValues);
 
         return new DraftApplicationResponse(
+            application.getId(),
             application.getApplicationNumber(),
             application.getTitle(),
             application.getStatus(),
@@ -94,6 +137,11 @@ class ApplicationController {
             });
     }
 
+    private Employee demoApplicant() {
+        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPLICANT_EMPLOYEE_CODE)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo applicant not found"));
+    }
+
     private static String normalizeValue(String value) {
         return value == null ? "" : value.trim();
     }
@@ -106,6 +154,7 @@ class ApplicationController {
     }
 
     record DraftApplicationResponse(
+        UUID id,
         String applicationNumber,
         String title,
         String status,
@@ -113,5 +162,82 @@ class ApplicationController {
         String formName,
         int fieldValueCount
     ) {
+    }
+
+    record ApplicationSummaryResponse(
+        UUID id,
+        String applicationNumber,
+        String title,
+        String status,
+        String applicantName,
+        String formName,
+        String createdAt,
+        String submittedAt
+    ) {
+        static ApplicationSummaryResponse from(
+            WorkflowApplication application,
+            ApplicationFormDefinition formDefinition,
+            Employee applicant
+        ) {
+            return new ApplicationSummaryResponse(
+                application.getId(),
+                application.getApplicationNumber(),
+                application.getTitle(),
+                application.getStatus(),
+                applicant.getName(),
+                formDefinition == null ? "" : formDefinition.getFormName(),
+                application.getCreatedAt().toString(),
+                application.getSubmittedAt() == null ? null : application.getSubmittedAt().toString()
+            );
+        }
+    }
+
+    record ApplicationDetailResponse(
+        UUID id,
+        String applicationNumber,
+        String title,
+        String status,
+        String applicantName,
+        String formName,
+        String createdAt,
+        String submittedAt,
+        List<ApplicationFieldValueResponse> values
+    ) {
+        static ApplicationDetailResponse from(
+            WorkflowApplication application,
+            ApplicationFormDefinition formDefinition,
+            Employee applicant,
+            List<ApplicationFieldValue> fieldValues
+        ) {
+            return new ApplicationDetailResponse(
+                application.getId(),
+                application.getApplicationNumber(),
+                application.getTitle(),
+                application.getStatus(),
+                applicant.getName(),
+                formDefinition.getFormName(),
+                application.getCreatedAt().toString(),
+                application.getSubmittedAt() == null ? null : application.getSubmittedAt().toString(),
+                fieldValues.stream().map(ApplicationFieldValueResponse::from).toList()
+            );
+        }
+    }
+
+    record ApplicationFieldValueResponse(
+        String fieldKey,
+        String label,
+        String dataType,
+        String value,
+        int displayOrder
+    ) {
+        static ApplicationFieldValueResponse from(ApplicationFieldValue fieldValue) {
+            return new ApplicationFieldValueResponse(
+                fieldValue.getFieldKey(),
+                fieldValue.getLabel(),
+                fieldValue.getDataType(),
+                fieldValue.getValueText(),
+                fieldValue.getDisplayOrder()
+            );
+        }
     }
 }

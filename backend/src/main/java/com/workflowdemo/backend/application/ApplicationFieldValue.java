@@ -51,4 +51,24 @@ class ApplicationFieldValue {
         this.displayOrder = field.getDisplayOrder();
         this.createdAt = Instant.now();
     }
+
+    String getFieldKey() {
+        return fieldKey;
+    }
+
+    String getLabel() {
+        return label;
+    }
+
+    String getDataType() {
+        return dataType;
+    }
+
+    String getValueText() {
+        return valueText;
+    }
+
+    int getDisplayOrder() {
+        return displayOrder;
+    }
 }

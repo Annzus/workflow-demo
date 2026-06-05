@@ -55,6 +55,10 @@ class WorkflowApplication {
         return id;
     }
 
+    UUID getFormDefinitionId() {
+        return formDefinitionId;
+    }
+
     String getApplicationNumber() {
         return applicationNumber;
     }
@@ -63,7 +67,19 @@ class WorkflowApplication {
         return title;
     }
 
+    UUID getApplicantEmployeeId() {
+        return applicantEmployeeId;
+    }
+
     String getStatus() {
         return status;
+    }
+
+    Instant getSubmittedAt() {
+        return submittedAt;
+    }
+
+    Instant getCreatedAt() {
+        return createdAt;
     }
 }

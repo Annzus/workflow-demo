@@ -3,6 +3,7 @@ import {
   BadgeCheck,
   Bell,
   ClipboardList,
+  FileText,
   FileSpreadsheet,
   GitBranch,
   LayoutDashboard,
@@ -10,41 +11,19 @@ import {
   Settings,
   Users,
 } from 'lucide-react'
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import {
   createDraftApplication,
   type FormField,
+  getApplication,
+  getApplications,
   getEmployees,
   getFormDefinition,
   getFormDefinitions,
   getOrganizations,
   getPositions,
 } from './api'
-
-const applications = [
-  {
-    title: '東京出張申請',
-    form: '出張申請',
-    applicant: '山田 太郎',
-    status: '承認中',
-    updated: '2026-06-04',
-  },
-  {
-    title: '業務用PC購入稟議',
-    form: '稟議',
-    applicant: '久米 幸子',
-    status: '確認待ち',
-    updated: '2026-06-03',
-  },
-  {
-    title: '月次勤務表',
-    form: '勤務表',
-    applicant: '柳田 雅之',
-    status: '承認済み',
-    updated: '2026-06-01',
-  },
-]
 
 const navItems = [
   { label: 'ダッシュボード', icon: LayoutDashboard, active: true },
@@ -86,10 +65,39 @@ function editorInputType(field: FormField) {
   return 'text'
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+function formatApplicationDate(value: string) {
+  return dateTimeFormatter.format(new Date(value))
+}
+
+function statusLabel(status: string) {
+  if (status === 'DRAFT') {
+    return '下書き'
+  }
+  if (status === 'SUBMITTED') {
+    return '申請中'
+  }
+  if (status === 'APPROVED') {
+    return '承認済み'
+  }
+  if (status === 'REJECTED') {
+    return '差戻し'
+  }
+  return status
+}
+
 function App() {
+  const queryClient = useQueryClient()
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
+  const [selectedApplicationId, setSelectedApplicationId] = useState<string>()
   const employeesQuery = useQuery({
     queryKey: ['employees'],
     queryFn: getEmployees,
@@ -106,16 +114,27 @@ function App() {
     queryKey: ['formDefinitions'],
     queryFn: getFormDefinitions,
   })
+  const applicationsQuery = useQuery({
+    queryKey: ['applications'],
+    queryFn: getApplications,
+  })
 
   const employees = employeesQuery.data ?? []
   const organizations = organizationsQuery.data ?? []
   const positions = positionsQuery.data ?? []
   const formDefinitions = formDefinitionsQuery.data ?? []
+  const workflowApplications = applicationsQuery.data ?? []
   const activeFormCode = selectedFormCode ?? formDefinitions[0]?.formCode
+  const activeApplicationId = selectedApplicationId ?? workflowApplications[0]?.id
   const selectedFormQuery = useQuery({
     queryKey: ['formDefinition', activeFormCode],
     queryFn: () => getFormDefinition(activeFormCode ?? ''),
     enabled: Boolean(activeFormCode),
+  })
+  const selectedApplicationQuery = useQuery({
+    queryKey: ['application', activeApplicationId],
+    queryFn: () => getApplication(activeApplicationId ?? ''),
+    enabled: Boolean(activeApplicationId),
   })
   const isMasterDataLoading =
     employeesQuery.isLoading || organizationsQuery.isLoading || positionsQuery.isLoading
@@ -147,9 +166,19 @@ function App() {
     : formDefinitionsQuery.isLoading
       ? '読込中'
       : `${formDefinitions.length}件`
+  const applicationCountLabel = applicationsQuery.isError
+    ? '取得エラー'
+    : applicationsQuery.isLoading
+      ? '読込中'
+      : `${workflowApplications.length}件`
   const selectedForm = selectedFormQuery.data
+  const selectedApplication = selectedApplicationQuery.data
   const createDraftMutation = useMutation({
     mutationFn: createDraftApplication,
+    onSuccess: (savedApplication) => {
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      setSelectedApplicationId(savedApplication.id)
+    },
   })
 
   useEffect(() => {
@@ -225,8 +254,8 @@ function App() {
           </article>
           <article>
             <span>申請中</span>
-            <strong>14</strong>
-            <small>6種類の申請書</small>
+            <strong>{applicationsQuery.isLoading ? '-' : workflowApplications.length}</strong>
+            <small>{applicationsQuery.isError ? '取得エラー' : '保存済み申請'}</small>
           </article>
           <article>
             <span>社員マスタ</span>
@@ -242,7 +271,7 @@ function App() {
                 <p className="eyebrow">申請キュー</p>
                 <h2>最近の申請</h2>
               </div>
-              <button className="primary-button">新規申請</button>
+              <span className="count-label">{applicationCountLabel}</span>
             </div>
 
             <div className="table">
@@ -253,32 +282,72 @@ function App() {
                 <span>ステータス</span>
                 <span>更新日</span>
               </div>
-              {applications.map((application) => (
-                <div className="table-row" key={application.title}>
-                  <strong>{application.title}</strong>
-                  <span>{application.form}</span>
-                  <span>{application.applicant}</span>
-                  <span className="status-pill">{application.status}</span>
-                  <span>{application.updated}</span>
-                </div>
-              ))}
+              {applicationsQuery.isError ? (
+                <div className="table-empty">申請一覧を取得できません</div>
+              ) : applicationsQuery.isLoading ? (
+                <div className="table-empty">申請一覧を読込中</div>
+              ) : workflowApplications.length === 0 ? (
+                <div className="table-empty">まだ保存された申請はありません</div>
+              ) : (
+                workflowApplications.map((application) => (
+                  <button
+                    className={
+                      activeApplicationId === application.id
+                        ? 'table-row application-row active'
+                        : 'table-row application-row'
+                    }
+                    key={application.id}
+                    onClick={() => setSelectedApplicationId(application.id)}
+                    type="button"
+                  >
+                    <strong>{application.title}</strong>
+                    <span>{application.formName}</span>
+                    <span>{application.applicantName}</span>
+                    <span className="status-pill">{statusLabel(application.status)}</span>
+                    <span>{formatApplicationDate(application.createdAt)}</span>
+                  </button>
+                ))
+              )}
             </div>
           </article>
 
-          <article className="panel flow-panel">
+          <article className="panel application-detail-panel">
             <div className="panel-header">
               <div>
-                <p className="eyebrow">ワークフロー定義</p>
-                <h2>部門承認ルート</h2>
+                <p className="eyebrow">申請詳細</p>
+                <h2>入力内容</h2>
               </div>
+              <FileText size={20} aria-hidden="true" />
             </div>
-            <div className="flow-preview" aria-label="ワークフローのプレビュー">
-              <div className="flow-node start">申請者</div>
-              <div className="flow-line" />
-              <div className="flow-node">課長</div>
-              <div className="flow-line" />
-              <div className="flow-node final">部長</div>
-            </div>
+            {selectedApplicationQuery.isError ? (
+              <div className="compact-row compact-row-muted">申請詳細を取得できません</div>
+            ) : selectedApplicationQuery.isLoading && activeApplicationId ? (
+              <div className="compact-row">申請詳細を読込中</div>
+            ) : selectedApplication ? (
+              <div className="application-detail">
+                <div className="application-detail-title">
+                  <span>{selectedApplication.applicationNumber}</span>
+                  <strong>{selectedApplication.title}</strong>
+                  <small>
+                    {selectedApplication.formName} / {selectedApplication.applicantName}
+                  </small>
+                </div>
+                <div className="detail-meta-grid">
+                  <span>{statusLabel(selectedApplication.status)}</span>
+                  <span>{formatApplicationDate(selectedApplication.createdAt)}</span>
+                </div>
+                <div className="detail-value-list">
+                  {selectedApplication.values.map((fieldValue) => (
+                    <div className="detail-value-row" key={fieldValue.fieldKey}>
+                      <span>{fieldValue.label}</span>
+                      <strong>{fieldValue.value || '-'}</strong>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="compact-row">申請を選択してください</div>
+            )}
           </article>
         </section>
 
