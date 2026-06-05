@@ -390,6 +390,33 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.detail-action-bar {
+  min-height: 44px;
+  padding-top: 12px;
+  border-top: 1px solid #dfe5df;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.detail-submit-button {
+  gap: 7px;
+}
+
+.detail-state-note {
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid #dfe5df;
+  border-radius: 6px;
+  background: #f4f7f4;
+  color: #334313;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+}
+
 .flow-preview {
   height: 238px;
   margin-top: 18px;

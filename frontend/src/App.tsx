@@ -8,6 +8,7 @@ import {
   GitBranch,
   LayoutDashboard,
   Search,
+  Send,
   Settings,
   Users,
 } from 'lucide-react'
@@ -23,6 +24,7 @@ import {
   getFormDefinitions,
   getOrganizations,
   getPositions,
+  submitApplication,
 } from './api'
 
 const navItems = [
@@ -180,12 +182,23 @@ function App() {
       setSelectedApplicationId(savedApplication.id)
     },
   })
+  const submitApplicationMutation = useMutation({
+    mutationFn: submitApplication,
+    onSuccess: (submittedApplication) => {
+      queryClient.setQueryData(['application', submittedApplication.id], submittedApplication)
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+    },
+  })
 
   useEffect(() => {
     setApplicationTitle('')
     setDraftValues({})
     createDraftMutation.reset()
   }, [activeFormCode])
+
+  useEffect(() => {
+    submitApplicationMutation.reset()
+  }, [activeApplicationId])
 
   function updateDraftValue(fieldKey: string, value: string) {
     setDraftValues((currentValues) => ({
@@ -206,6 +219,14 @@ function App() {
       title: applicationTitle,
       values: draftValues,
     })
+  }
+
+  function submitSelectedApplication() {
+    if (!selectedApplication || selectedApplication.status !== 'DRAFT') {
+      return
+    }
+
+    submitApplicationMutation.mutate(selectedApplication.id)
   }
 
   return (
@@ -343,6 +364,27 @@ function App() {
                       <strong>{fieldValue.value || '-'}</strong>
                     </div>
                   ))}
+                </div>
+                <div className="detail-action-bar">
+                  {submitApplicationMutation.isError ? (
+                    <span className="draft-message error">申請を提出できません</span>
+                  ) : null}
+                  {submitApplicationMutation.isSuccess ? (
+                    <span className="draft-message">申請を提出しました</span>
+                  ) : null}
+                  {selectedApplication.status === 'DRAFT' ? (
+                    <button
+                      className="primary-button detail-submit-button"
+                      disabled={submitApplicationMutation.isPending}
+                      onClick={submitSelectedApplication}
+                      type="button"
+                    >
+                      <Send size={15} aria-hidden="true" />
+                      {submitApplicationMutation.isPending ? '提出中' : '申請する'}
+                    </button>
+                  ) : (
+                    <span className="detail-state-note">提出済み</span>
+                  )}
                 </div>
               </div>
             ) : (

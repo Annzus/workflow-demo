@@ -127,6 +127,28 @@ class ApplicationController {
         );
     }
 
+    @PostMapping("/{id}/submit")
+    @Transactional
+    ApplicationDetailResponse submitApplication(@PathVariable UUID id) {
+        Employee applicant = demoApplicant();
+        WorkflowApplication application = applicationRepository.findById(id)
+            .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+        ApplicationFormDefinition formDefinition = formDefinitionRepository.findById(application.getFormDefinitionId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
+
+        try {
+            application.submit();
+        } catch (IllegalStateException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
+        }
+
+        List<ApplicationFieldValue> fieldValues =
+            fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
+
+        return ApplicationDetailResponse.from(application, formDefinition, applicant, fieldValues);
+    }
+
     private static void validateRequiredFields(List<ApplicationFormField> fields, Map<String, String> values) {
         fields.stream()
             .filter(ApplicationFormField::isRequired)

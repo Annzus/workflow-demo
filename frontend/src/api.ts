@@ -158,3 +158,9 @@ export function createDraftApplication(request: CreateDraftApplicationRequest) {
     authorization: DEMO_AUTHORIZATION_HEADER,
   })
 }
+
+export function submitApplication(id: string) {
+  return postJson<ApplicationDetail, Record<string, never>>(`/api/applications/${id}/submit`, {}, {
+    authorization: DEMO_AUTHORIZATION_HEADER,
+  })
+}

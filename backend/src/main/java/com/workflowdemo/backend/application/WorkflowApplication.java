@@ -51,6 +51,14 @@ class WorkflowApplication {
         this.createdAt = now;
     }
 
+    void submit() {
+        if (!"DRAFT".equals(status)) {
+            throw new IllegalStateException("Only draft applications can be submitted");
+        }
+        this.status = "SUBMITTED";
+        this.submittedAt = Instant.now();
+    }
+
     UUID getId() {
         return id;
     }

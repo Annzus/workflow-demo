@@ -102,6 +102,39 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.values[0].value").value("東京本社"));
 	}
 
+	@Test
+	void submitApplicationRequiresAuthentication() throws Exception {
+		String id = createTravelDraft("提出認証確認");
+
+		mockMvc.perform(post("/api/applications/{id}/submit", id))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void submitApplicationChangesDraftToSubmitted() throws Exception {
+		String id = createTravelDraft("提出確認");
+
+		mockMvc.perform(post("/api/applications/{id}/submit", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("SUBMITTED"))
+			.andExpect(jsonPath("$.submittedAt").isNotEmpty())
+			.andExpect(jsonPath("$.values[0].value").value("東京本社"));
+	}
+
+	@Test
+	void submitApplicationRejectsAlreadySubmittedApplication() throws Exception {
+		String id = createTravelDraft("重複提出確認");
+		mockMvc.perform(post("/api/applications/{id}/submit", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(post("/api/applications/{id}/submit", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isBadRequest())
+			.andExpect(jsonPath("$.message").value("Only draft applications can be submitted"));
+	}
+
 	private String createTravelDraft(String title) throws Exception {
 		MvcResult result = mockMvc.perform(post("/api/applications/drafts")
 				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
