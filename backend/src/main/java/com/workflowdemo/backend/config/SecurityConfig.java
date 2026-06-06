@@ -40,6 +40,10 @@ class SecurityConfig {
             User.withUsername("demo1@growtea.co.jp")
                 .password("{noop}demo1001")
                 .roles("DEMO_USER")
+                .build(),
+            User.withUsername("demo5@growtea.co.jp")
+                .password("{noop}demo1005")
+                .roles("DEMO_USER")
                 .build()
         );
     }

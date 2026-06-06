@@ -10,6 +10,7 @@ import com.workflowdemo.backend.approval.ApprovalHistory;
 import com.workflowdemo.backend.approval.ApprovalHistoryRepository;
 import com.workflowdemo.backend.approval.ApprovalTask;
 import com.workflowdemo.backend.approval.ApprovalTaskRepository;
+import com.workflowdemo.backend.auth.DemoUserContext;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinition;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinitionRepository;
 import com.workflowdemo.backend.formdefinition.ApplicationFormField;
@@ -36,9 +37,6 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/applications")
 class ApplicationController {
 
-    private static final String DEMO_APPLICANT_EMPLOYEE_CODE = "1001";
-    private static final String DEMO_APPROVER_EMPLOYEE_CODE = "1005";
-
     private final ApplicationFormDefinitionRepository formDefinitionRepository;
     private final ApplicationFormFieldRepository formFieldRepository;
     private final EmployeeRepository employeeRepository;
@@ -46,6 +44,7 @@ class ApplicationController {
     private final ApplicationFieldValueRepository fieldValueRepository;
     private final ApprovalTaskRepository approvalTaskRepository;
     private final ApprovalHistoryRepository approvalHistoryRepository;
+    private final DemoUserContext demoUserContext;
 
     ApplicationController(
         ApplicationFormDefinitionRepository formDefinitionRepository,
@@ -54,7 +53,8 @@ class ApplicationController {
         WorkflowApplicationRepository applicationRepository,
         ApplicationFieldValueRepository fieldValueRepository,
         ApprovalTaskRepository approvalTaskRepository,
-        ApprovalHistoryRepository approvalHistoryRepository
+        ApprovalHistoryRepository approvalHistoryRepository,
+        DemoUserContext demoUserContext
     ) {
         this.formDefinitionRepository = formDefinitionRepository;
         this.formFieldRepository = formFieldRepository;
@@ -63,12 +63,13 @@ class ApplicationController {
         this.fieldValueRepository = fieldValueRepository;
         this.approvalTaskRepository = approvalTaskRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
+        this.demoUserContext = demoUserContext;
     }
 
     @GetMapping
     @Transactional(readOnly = true)
     List<ApplicationSummaryResponse> applications() {
-        Employee applicant = demoApplicant();
+        Employee applicant = demoUserContext.currentEmployee();
         List<WorkflowApplication> applications =
             applicationRepository.findByApplicantEmployeeIdOrderByCreatedAtDesc(applicant.getId());
         Map<UUID, ApplicationFormDefinition> formsById = formDefinitionRepository.findAllById(
@@ -91,24 +92,25 @@ class ApplicationController {
     @GetMapping("/{id}")
     @Transactional(readOnly = true)
     ApplicationDetailResponse application(@PathVariable UUID id) {
-        Employee applicant = demoApplicant();
+        Employee currentEmployee = demoUserContext.currentEmployee();
         WorkflowApplication application = applicationRepository.findById(id)
-            .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+        List<ApprovalTask> approvalTasks = approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
+            application.getId()
+        );
+        ensureApplicationReadable(application, currentEmployee, approvalTasks);
+        Employee applicant = applicantFor(application);
         ApplicationFormDefinition formDefinition = formDefinitionRepository.findById(application.getFormDefinitionId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
-        List<ApprovalTask> approvalTasks = approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
-            application.getId()
-        );
 
         return ApplicationDetailResponse.from(
             application,
             formDefinition,
             applicant,
             fieldValues,
-            buildApprovalRoute(application, applicant, demoApprover(), approvalTasks)
+            buildApprovalRoute(application, applicant, demoUserContext.demoApprover(), approvalTasks)
         );
     }
 
@@ -118,7 +120,7 @@ class ApplicationController {
     DraftApplicationResponse createDraft(@Valid @RequestBody CreateDraftApplicationRequest request) {
         ApplicationFormDefinition formDefinition = formDefinitionRepository.findByFormCodeAndActiveTrue(request.formCode())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
-        Employee applicant = demoApplicant();
+        Employee applicant = demoUserContext.currentEmployee();
         List<ApplicationFormField> fields =
             formFieldRepository.findByFormDefinitionIdAndActiveTrueOrderByDisplayOrderAsc(formDefinition.getId());
 
@@ -150,8 +152,8 @@ class ApplicationController {
     @PostMapping("/{id}/submit")
     @Transactional
     ApplicationDetailResponse submitApplication(@PathVariable UUID id) {
-        Employee applicant = demoApplicant();
-        Employee approver = demoApprover();
+        Employee applicant = demoUserContext.currentEmployee();
+        Employee approver = demoUserContext.demoApprover();
         WorkflowApplication application = applicationRepository.findById(id)
             .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
@@ -184,10 +186,14 @@ class ApplicationController {
     @GetMapping("/{id}/history")
     @Transactional(readOnly = true)
     List<ApplicationHistoryResponse> applicationHistory(@PathVariable UUID id) {
-        Employee applicant = demoApplicant();
+        Employee currentEmployee = demoUserContext.currentEmployee();
         WorkflowApplication application = applicationRepository.findById(id)
-            .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+        ensureApplicationReadable(
+            application,
+            currentEmployee,
+            approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(application.getId())
+        );
 
         return approvalHistoryRepository.findByApplicationIdOrderByCreatedAtAsc(application.getId())
             .stream()
@@ -205,14 +211,24 @@ class ApplicationController {
             });
     }
 
-    private Employee demoApplicant() {
-        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPLICANT_EMPLOYEE_CODE)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo applicant not found"));
+    private Employee applicantFor(WorkflowApplication application) {
+        return employeeRepository.findById(application.getApplicantEmployeeId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Applicant not found"));
     }
 
-    private Employee demoApprover() {
-        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPROVER_EMPLOYEE_CODE)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo approver not found"));
+    private static void ensureApplicationReadable(
+        WorkflowApplication application,
+        Employee currentEmployee,
+        List<ApprovalTask> approvalTasks
+    ) {
+        if (application.getApplicantEmployeeId().equals(currentEmployee.getId())) {
+            return;
+        }
+        boolean currentApprover = approvalTasks.stream()
+            .anyMatch(task -> task.getApproverEmployeeId().equals(currentEmployee.getId()));
+        if (!currentApprover) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found");
+        }
     }
 
     private static String normalizeValue(String value) {

@@ -8,10 +8,10 @@ import java.util.stream.Collectors;
 
 import com.workflowdemo.backend.application.WorkflowApplication;
 import com.workflowdemo.backend.application.WorkflowApplicationRepository;
+import com.workflowdemo.backend.auth.DemoUserContext;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinition;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinitionRepository;
 import com.workflowdemo.backend.masterdata.Employee;
-import com.workflowdemo.backend.masterdata.EmployeeRepository;
 
 import jakarta.validation.Valid;
 
@@ -29,32 +29,30 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/approval-tasks")
 class ApprovalController {
 
-    private static final String DEMO_APPROVER_EMPLOYEE_CODE = "1005";
-
     private final ApprovalTaskRepository approvalTaskRepository;
     private final ApprovalHistoryRepository approvalHistoryRepository;
     private final WorkflowApplicationRepository applicationRepository;
     private final ApplicationFormDefinitionRepository formDefinitionRepository;
-    private final EmployeeRepository employeeRepository;
+    private final DemoUserContext demoUserContext;
 
     ApprovalController(
         ApprovalTaskRepository approvalTaskRepository,
         ApprovalHistoryRepository approvalHistoryRepository,
         WorkflowApplicationRepository applicationRepository,
         ApplicationFormDefinitionRepository formDefinitionRepository,
-        EmployeeRepository employeeRepository
+        DemoUserContext demoUserContext
     ) {
         this.approvalTaskRepository = approvalTaskRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
         this.applicationRepository = applicationRepository;
         this.formDefinitionRepository = formDefinitionRepository;
-        this.employeeRepository = employeeRepository;
+        this.demoUserContext = demoUserContext;
     }
 
     @GetMapping("/pending")
     @Transactional(readOnly = true)
     List<ApprovalTaskResponse> pendingTasks() {
-        Employee approver = demoApprover();
+        Employee approver = demoUserContext.currentEmployee();
         List<ApprovalTask> tasks =
             approvalTaskRepository.findByApproverEmployeeIdAndStatusOrderByCreatedAtDesc(approver.getId(), "PENDING");
         Map<UUID, WorkflowApplication> applicationsById = applicationRepository.findAllById(
@@ -90,7 +88,7 @@ class ApprovalController {
     }
 
     private ApprovalTaskActionResponse completeTask(UUID taskId, String action, String comment) {
-        Employee approver = demoApprover();
+        Employee approver = demoUserContext.currentEmployee();
         ApprovalTask task = approvalTaskRepository.findById(taskId)
             .filter(foundTask -> foundTask.getApproverEmployeeId().equals(approver.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Approval task not found"));
@@ -119,11 +117,6 @@ class ApprovalController {
             task.getStatus(),
             ApprovalHistoryResponse.from(history)
         );
-    }
-
-    private Employee demoApprover() {
-        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPROVER_EMPLOYEE_CODE)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo approver not found"));
     }
 
     private static String normalizeComment(String comment) {

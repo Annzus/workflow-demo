@@ -3,10 +3,12 @@ package com.workflowdemo.backend.attachment;
 import java.util.List;
 import java.util.UUID;
 
+import com.workflowdemo.backend.approval.ApprovalTask;
+import com.workflowdemo.backend.approval.ApprovalTaskRepository;
 import com.workflowdemo.backend.application.WorkflowApplication;
 import com.workflowdemo.backend.application.WorkflowApplicationRepository;
+import com.workflowdemo.backend.auth.DemoUserContext;
 import com.workflowdemo.backend.masterdata.Employee;
-import com.workflowdemo.backend.masterdata.EmployeeRepository;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -25,31 +27,33 @@ import org.springframework.web.server.ResponseStatusException;
 @RequestMapping("/api/applications/{applicationId}/attachments")
 class ApplicationAttachmentController {
 
-    private static final String DEMO_APPLICANT_EMPLOYEE_CODE = "1001";
     private static final int MAX_ORIGINAL_FILENAME_LENGTH = 255;
     private static final int MAX_CONTENT_TYPE_LENGTH = 150;
 
     private final WorkflowApplicationRepository applicationRepository;
-    private final EmployeeRepository employeeRepository;
+    private final ApprovalTaskRepository approvalTaskRepository;
     private final ApplicationAttachmentRepository attachmentRepository;
     private final AttachmentStorageService storageService;
+    private final DemoUserContext demoUserContext;
 
     ApplicationAttachmentController(
         WorkflowApplicationRepository applicationRepository,
-        EmployeeRepository employeeRepository,
+        ApprovalTaskRepository approvalTaskRepository,
         ApplicationAttachmentRepository attachmentRepository,
-        AttachmentStorageService storageService
+        AttachmentStorageService storageService,
+        DemoUserContext demoUserContext
     ) {
         this.applicationRepository = applicationRepository;
-        this.employeeRepository = employeeRepository;
+        this.approvalTaskRepository = approvalTaskRepository;
         this.attachmentRepository = attachmentRepository;
         this.storageService = storageService;
+        this.demoUserContext = demoUserContext;
     }
 
     @GetMapping
     @Transactional(readOnly = true)
     List<ApplicationAttachmentResponse> attachments(@PathVariable UUID applicationId) {
-        ensureApplicationAccess(applicationId);
+        ensureApplicationReadable(applicationId);
         return attachmentRepository.findByApplicationIdOrderByUploadedAtDesc(applicationId)
             .stream()
             .map(ApplicationAttachmentResponse::from)
@@ -63,8 +67,8 @@ class ApplicationAttachmentController {
         @PathVariable UUID applicationId,
         @RequestPart("file") MultipartFile file
     ) {
-        WorkflowApplication application = ensureApplicationAccess(applicationId);
-        Employee applicant = demoApplicant();
+        Employee applicant = demoUserContext.currentEmployee();
+        WorkflowApplication application = ensureApplicantAccess(applicationId, applicant);
         if (file.isEmpty()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Attachment file is empty");
         }
@@ -102,16 +106,25 @@ class ApplicationAttachmentController {
         return ApplicationAttachmentResponse.from(attachment);
     }
 
-    private WorkflowApplication ensureApplicationAccess(UUID applicationId) {
-        Employee applicant = demoApplicant();
+    private WorkflowApplication ensureApplicantAccess(UUID applicationId, Employee applicant) {
         return applicationRepository.findById(applicationId)
             .filter(application -> application.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
     }
 
-    private Employee demoApplicant() {
-        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPLICANT_EMPLOYEE_CODE)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo applicant not found"));
+    private void ensureApplicationReadable(UUID applicationId) {
+        Employee currentEmployee = demoUserContext.currentEmployee();
+        WorkflowApplication application = applicationRepository.findById(applicationId)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+        if (application.getApplicantEmployeeId().equals(currentEmployee.getId())) {
+            return;
+        }
+        List<ApprovalTask> approvalTasks = approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(applicationId);
+        boolean currentApprover = approvalTasks.stream()
+            .anyMatch(task -> task.getApproverEmployeeId().equals(currentEmployee.getId()));
+        if (!currentApprover) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found");
+        }
     }
 
     private static String normalizeFilename(String filename) {

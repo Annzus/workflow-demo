@@ -1,5 +1,7 @@
 package com.workflowdemo.backend;
 
+import java.util.UUID;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workflowdemo.backend.approval.ApprovalTaskRepository;
@@ -13,6 +15,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -25,6 +28,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class BackendApplicationTests {
+
+	private static final String APPLICANT_USERNAME = "demo1@growtea.co.jp";
+	private static final String APPLICANT_PASSWORD = "demo1001";
+	private static final String APPROVER_USERNAME = "demo5@growtea.co.jp";
+	private static final String APPROVER_PASSWORD = "demo1005";
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -42,7 +50,7 @@ class BackendApplicationTests {
 	@Test
 	void createDraftRejectsMissingRequiredFieldsWithBadRequest() throws Exception {
 		mockMvc.perform(post("/api/applications/drafts")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.with(applicantAuth())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -91,9 +99,9 @@ class BackendApplicationTests {
 	@Test
 	void currentUserReturnsAuthenticatedDemoEmployee() throws Exception {
 		mockMvc.perform(get("/api/me")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.username").value("demo1@growtea.co.jp"))
+			.andExpect(jsonPath("$.username").value(APPLICANT_USERNAME))
 			.andExpect(jsonPath("$.employeeCode").value("1001"))
 			.andExpect(jsonPath("$.name").value("山田 太郎"))
 			.andExpect(jsonPath("$.organizationName").value("第１グループ"))
@@ -101,11 +109,23 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void currentUserReturnsAuthenticatedDemoApprover() throws Exception {
+		mockMvc.perform(get("/api/me")
+				.with(approverAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.username").value(APPROVER_USERNAME))
+			.andExpect(jsonPath("$.employeeCode").value("1005"))
+			.andExpect(jsonPath("$.name").value("岩瀬 大樹"))
+			.andExpect(jsonPath("$.organizationName").value("第１ソリューション部"))
+			.andExpect(jsonPath("$.positionName").value("部長"));
+	}
+
+	@Test
 	void applicationsReturnsCreatedDrafts() throws Exception {
 		createTravelDraft("一覧表示確認");
 
 		mockMvc.perform(get("/api/applications")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].title").value("一覧表示確認"))
 			.andExpect(jsonPath("$[0].status").value("DRAFT"))
@@ -114,11 +134,21 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void applicationsAreScopedToAuthenticatedApplicant() throws Exception {
+		createTravelDraft("申請者別一覧確認");
+
+		mockMvc.perform(get("/api/applications")
+				.with(approverAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(0));
+	}
+
+	@Test
 	void applicationDetailReturnsFieldValueSnapshot() throws Exception {
 		String id = createTravelDraft("詳細表示確認");
 
 		mockMvc.perform(get("/api/applications/{id}", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.title").value("詳細表示確認"))
 			.andExpect(jsonPath("$.values[0].fieldKey").value("destination"))
@@ -159,7 +189,7 @@ class BackendApplicationTests {
 
 		mockMvc.perform(multipart("/api/applications/{id}/attachments", id)
 				.file(file)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isCreated())
 			.andExpect(jsonPath("$.originalFilename").value("travel-plan.txt"))
 			.andExpect(jsonPath("$.contentType").value("text/plain"))
@@ -167,10 +197,47 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.uploadedByName").value("山田 太郎"));
 
 		mockMvc.perform(get("/api/applications/{id}/attachments", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].originalFilename").value("travel-plan.txt"))
 			.andExpect(jsonPath("$[0].uploadedByName").value("山田 太郎"));
+	}
+
+	@Test
+	void assignedApproverCanReadAttachmentListButCannotUpload() throws Exception {
+		String id = submitTravelDraft("添付参照確認");
+		MockMultipartFile file = new MockMultipartFile(
+			"file",
+			"approver-view.txt",
+			"text/plain",
+			"content".getBytes()
+		);
+
+		mockMvc.perform(get("/api/applications/{id}/attachments", id)
+				.with(approverAuth()))
+			.andExpect(status().isOk());
+
+		mockMvc.perform(multipart("/api/applications/{id}/attachments", id)
+				.file(file)
+				.with(approverAuth()))
+			.andExpect(status().isNotFound());
+	}
+
+	@Test
+	void assignedApproverCanReadApplicationDetailAndHistory() throws Exception {
+		String id = submitTravelDraft("承認者詳細参照確認");
+
+		mockMvc.perform(get("/api/applications/{id}", id)
+				.with(approverAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.title").value("承認者詳細参照確認"))
+			.andExpect(jsonPath("$.applicantName").value("山田 太郎"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("CURRENT"));
+
+		mockMvc.perform(get("/api/applications/{id}/history", id)
+				.with(approverAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].action").value("SUBMIT"));
 	}
 
 	@Test
@@ -186,7 +253,7 @@ class BackendApplicationTests {
 
 		mockMvc.perform(multipart("/api/applications/{id}/attachments", id)
 				.file(file)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isBadRequest());
 	}
 
@@ -203,7 +270,7 @@ class BackendApplicationTests {
 		String id = createTravelDraft("提出確認");
 
 		mockMvc.perform(post("/api/applications/{id}/submit", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("SUBMITTED"))
 			.andExpect(jsonPath("$.submittedAt").isNotEmpty())
@@ -218,11 +285,11 @@ class BackendApplicationTests {
 	void submitApplicationRejectsAlreadySubmittedApplication() throws Exception {
 		String id = createTravelDraft("重複提出確認");
 		mockMvc.perform(post("/api/applications/{id}/submit", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk());
 
 		mockMvc.perform(post("/api/applications/{id}/submit", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isBadRequest())
 			.andExpect(jsonPath("$.message").value("Only draft applications can be submitted"));
 	}
@@ -232,7 +299,12 @@ class BackendApplicationTests {
 		String id = submitTravelDraft("承認タスク確認");
 
 		mockMvc.perform(get("/api/approval-tasks/pending")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.length()").value(0));
+
+		mockMvc.perform(get("/api/approval-tasks/pending")
+				.with(approverAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].applicationId").value(id))
 			.andExpect(jsonPath("$[0].title").value("承認タスク確認"))
@@ -240,7 +312,7 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$[0].approverName").value("岩瀬 大樹"));
 
 		mockMvc.perform(get("/api/applications/{id}/history", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$[0].action").value("SUBMIT"))
 			.andExpect(jsonPath("$[0].actorName").value("山田 太郎"));
@@ -250,11 +322,11 @@ class BackendApplicationTests {
 	void applicationDetailDoesNotShowCurrentApprovalWhenTaskIsMissing() throws Exception {
 		String id = submitTravelDraft("承認タスク欠落確認");
 		approvalTaskRepository.deleteAll(approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
-			java.util.UUID.fromString(id)
+			UUID.fromString(id)
 		));
 
 		mockMvc.perform(get("/api/applications/{id}", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("SUBMITTED"))
 			.andExpect(jsonPath("$.approvalRoute[1].status").value("WAITING"))
@@ -267,7 +339,7 @@ class BackendApplicationTests {
 		String taskId = pendingTaskIdForApplication(applicationId);
 
 		mockMvc.perform(post("/api/approval-tasks/{id}/approve", taskId)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.with(approverAuth())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -281,7 +353,7 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.history.action").value("APPROVE"));
 
 		mockMvc.perform(get("/api/applications/{id}", applicationId)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(approverAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("APPROVED"))
 			.andExpect(jsonPath("$.approvalRoute[0].status").value("COMPLETED"))
@@ -290,12 +362,28 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void applicantCannotCompleteApproverTask() throws Exception {
+		String applicationId = submitTravelDraft("申請者承認不可確認");
+		String taskId = pendingTaskIdForApplication(applicationId);
+
+		mockMvc.perform(post("/api/approval-tasks/{id}/approve", taskId)
+				.with(applicantAuth())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "comment": "申請者は承認できません"
+					}
+					"""))
+			.andExpect(status().isNotFound());
+	}
+
+	@Test
 	void rejectPendingTaskChangesApplicationToRejected() throws Exception {
 		String applicationId = submitTravelDraft("否認確認");
 		String taskId = pendingTaskIdForApplication(applicationId);
 
 		mockMvc.perform(post("/api/approval-tasks/{id}/reject", taskId)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.with(approverAuth())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -309,7 +397,7 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.history.action").value("REJECT"));
 
 		mockMvc.perform(get("/api/applications/{id}", applicationId)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(approverAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("REJECTED"))
 			.andExpect(jsonPath("$.approvalRoute[1].status").value("REJECTED"))
@@ -318,7 +406,7 @@ class BackendApplicationTests {
 
 	private String createTravelDraft(String title) throws Exception {
 		MvcResult result = mockMvc.perform(post("/api/applications/drafts")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.with(applicantAuth())
 				.contentType(MediaType.APPLICATION_JSON)
 				.content("""
 					{
@@ -344,7 +432,7 @@ class BackendApplicationTests {
 	private String submitTravelDraft(String title) throws Exception {
 		String id = createTravelDraft(title);
 		mockMvc.perform(post("/api/applications/{id}/submit", id)
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(applicantAuth()))
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("SUBMITTED"));
 		return id;
@@ -352,7 +440,7 @@ class BackendApplicationTests {
 
 	private String pendingTaskIdForApplication(String applicationId) throws Exception {
 		MvcResult result = mockMvc.perform(get("/api/approval-tasks/pending")
-				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+				.with(approverAuth()))
 			.andExpect(status().isOk())
 			.andReturn();
 
@@ -363,6 +451,14 @@ class BackendApplicationTests {
 			}
 		}
 		throw new AssertionError("Pending task not found for application " + applicationId);
+	}
+
+	private static RequestPostProcessor applicantAuth() {
+		return httpBasic(APPLICANT_USERNAME, APPLICANT_PASSWORD);
+	}
+
+	private static RequestPostProcessor approverAuth() {
+		return httpBasic(APPROVER_USERNAME, APPROVER_PASSWORD);
 	}
 
 }

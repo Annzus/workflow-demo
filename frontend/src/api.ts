@@ -142,8 +142,23 @@ export type CurrentUser = {
 
 const AUTH_STORAGE_KEY = 'workflowDemoAuthorization'
 
-export const DEMO_USERNAME = 'demo1@growtea.co.jp'
-export const DEMO_PASSWORD = 'demo1001'
+export const DEMO_ACCOUNTS = [
+  {
+    label: '申請者',
+    username: 'demo1@growtea.co.jp',
+    password: 'demo1001',
+    employeeName: '山田 太郎',
+  },
+  {
+    label: '承認者',
+    username: 'demo5@growtea.co.jp',
+    password: 'demo1005',
+    employeeName: '岩瀬 大樹',
+  },
+] as const
+
+export const DEMO_USERNAME = DEMO_ACCOUNTS[0].username
+export const DEMO_PASSWORD = DEMO_ACCOUNTS[0].password
 
 export function buildBasicAuthorization(username: string, password: string) {
   return `Basic ${btoa(`${username}:${password}`)}`

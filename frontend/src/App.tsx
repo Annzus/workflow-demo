@@ -25,6 +25,7 @@ import {
   buildBasicAuthorization,
   clearAuthorization,
   createDraftApplication,
+  DEMO_ACCOUNTS,
   DEMO_PASSWORD,
   DEMO_USERNAME,
   type FormField,
@@ -155,8 +156,8 @@ function routeStatusLabel(status: string) {
 function App() {
   const queryClient = useQueryClient()
   const [authorization, setAuthorization] = useState<string | null>(() => getSavedAuthorization())
-  const [loginUsername, setLoginUsername] = useState(DEMO_USERNAME)
-  const [loginPassword, setLoginPassword] = useState(DEMO_PASSWORD)
+  const [loginUsername, setLoginUsername] = useState<string>(DEMO_USERNAME)
+  const [loginPassword, setLoginPassword] = useState<string>(DEMO_PASSWORD)
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
@@ -467,8 +468,22 @@ function App() {
 
           <div className="login-demo-card">
             <strong>デモアカウント</strong>
-            <span>{DEMO_USERNAME}</span>
-            <span>{DEMO_PASSWORD}</span>
+            {DEMO_ACCOUNTS.map((account) => (
+              <button
+                className="login-demo-account"
+                key={account.username}
+                onClick={() => {
+                  setLoginUsername(account.username)
+                  setLoginPassword(account.password)
+                  loginMutation.reset()
+                }}
+                type="button"
+              >
+                <span>{account.label}</span>
+                <strong>{account.employeeName}</strong>
+                <small>{account.username} / {account.password}</small>
+              </button>
+            ))}
           </div>
         </section>
       </main>
