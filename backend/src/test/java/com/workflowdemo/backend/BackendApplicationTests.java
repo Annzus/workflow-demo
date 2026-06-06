@@ -77,6 +77,24 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void currentUserRequiresAuthentication() throws Exception {
+		mockMvc.perform(get("/api/me"))
+			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void currentUserReturnsAuthenticatedDemoEmployee() throws Exception {
+		mockMvc.perform(get("/api/me")
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.username").value("demo1@growtea.co.jp"))
+			.andExpect(jsonPath("$.employeeCode").value("1001"))
+			.andExpect(jsonPath("$.name").value("山田 太郎"))
+			.andExpect(jsonPath("$.organizationName").value("第１グループ"))
+			.andExpect(jsonPath("$.positionName").value("課長"));
+	}
+
+	@Test
 	void applicationsReturnsCreatedDrafts() throws Exception {
 		createTravelDraft("一覧表示確認");
 

@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useState } from 'react'
+import { type FormEvent, useState } from 'react'
 import {
   BadgeCheck,
   Bell,
@@ -8,9 +8,12 @@ import {
   FileSpreadsheet,
   GitBranch,
   LayoutDashboard,
+  LogIn,
+  LogOut,
   Search,
   Send,
   Settings,
+  UserCircle,
   Users,
   X,
 } from 'lucide-react'
@@ -18,7 +21,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import {
   approveApprovalTask,
+  buildBasicAuthorization,
+  clearAuthorization,
   createDraftApplication,
+  DEMO_PASSWORD,
+  DEMO_USERNAME,
   type FormField,
   getApplication,
   getApplicationHistory,
@@ -26,10 +33,13 @@ import {
   getEmployees,
   getFormDefinition,
   getFormDefinitions,
+  getMe,
   getOrganizations,
   getPendingApprovalTasks,
   getPositions,
+  getSavedAuthorization,
   rejectApprovalTask,
+  saveAuthorization,
   submitApplication,
 } from './api'
 
@@ -115,10 +125,21 @@ function historyActionLabel(action: string) {
 
 function App() {
   const queryClient = useQueryClient()
+  const [authorization, setAuthorization] = useState<string | null>(() => getSavedAuthorization())
+  const [loginUsername, setLoginUsername] = useState(DEMO_USERNAME)
+  const [loginPassword, setLoginPassword] = useState(DEMO_PASSWORD)
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>()
+  const currentUserQuery = useQuery({
+    queryKey: ['me', authorization],
+    queryFn: () => getMe(authorization ?? ''),
+    enabled: Boolean(authorization),
+    retry: false,
+  })
+  const currentUser = currentUserQuery.data
+  const isAuthenticated = Boolean(authorization && currentUser)
   const employeesQuery = useQuery({
     queryKey: ['employees'],
     queryFn: getEmployees,
@@ -138,10 +159,12 @@ function App() {
   const applicationsQuery = useQuery({
     queryKey: ['applications'],
     queryFn: getApplications,
+    enabled: isAuthenticated,
   })
   const approvalTasksQuery = useQuery({
     queryKey: ['approvalTasks'],
     queryFn: getPendingApprovalTasks,
+    enabled: isAuthenticated,
   })
 
   const employees = employeesQuery.data ?? []
@@ -160,12 +183,12 @@ function App() {
   const selectedApplicationQuery = useQuery({
     queryKey: ['application', activeApplicationId],
     queryFn: () => getApplication(activeApplicationId ?? ''),
-    enabled: Boolean(activeApplicationId),
+    enabled: isAuthenticated && Boolean(activeApplicationId),
   })
   const applicationHistoryQuery = useQuery({
     queryKey: ['applicationHistory', activeApplicationId],
     queryFn: () => getApplicationHistory(activeApplicationId ?? ''),
-    enabled: Boolean(activeApplicationId),
+    enabled: isAuthenticated && Boolean(activeApplicationId),
   })
   const isMasterDataLoading =
     employeesQuery.isLoading || organizationsQuery.isLoading || positionsQuery.isLoading
@@ -210,11 +233,25 @@ function App() {
   const selectedForm = selectedFormQuery.data
   const selectedApplication = selectedApplicationQuery.data
   const applicationHistory = applicationHistoryQuery.data ?? []
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { username: string; password: string }) => {
+      const nextAuthorization = buildBasicAuthorization(credentials.username, credentials.password)
+      const user = await getMe(nextAuthorization)
+      return { authorization: nextAuthorization, user }
+    },
+    onSuccess: (result) => {
+      saveAuthorization(result.authorization)
+      setAuthorization(result.authorization)
+      queryClient.setQueryData(['me', result.authorization], result.user)
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
+    },
+  })
   const createDraftMutation = useMutation({
     mutationFn: createDraftApplication,
     onSuccess: (savedApplication) => {
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
-      setSelectedApplicationId(savedApplication.id)
+      selectApplication(savedApplication.id)
     },
   })
   const submitApplicationMutation = useMutation({
@@ -229,7 +266,7 @@ function App() {
   const approveTaskMutation = useMutation({
     mutationFn: approveApprovalTask,
     onSuccess: (result) => {
-      setSelectedApplicationId(result.applicationId)
+      selectApplication(result.applicationId)
       void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
       void queryClient.invalidateQueries({ queryKey: ['application', result.applicationId] })
@@ -239,7 +276,7 @@ function App() {
   const rejectTaskMutation = useMutation({
     mutationFn: rejectApprovalTask,
     onSuccess: (result) => {
-      setSelectedApplicationId(result.applicationId)
+      selectApplication(result.applicationId)
       void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
       void queryClient.invalidateQueries({ queryKey: ['application', result.applicationId] })
@@ -247,23 +284,25 @@ function App() {
     },
   })
 
-  useEffect(() => {
-    setApplicationTitle('')
-    setDraftValues({})
-    createDraftMutation.reset()
-  }, [activeFormCode])
-
-  useEffect(() => {
-    submitApplicationMutation.reset()
-    approveTaskMutation.reset()
-    rejectTaskMutation.reset()
-  }, [activeApplicationId])
-
   function updateDraftValue(fieldKey: string, value: string) {
     setDraftValues((currentValues) => ({
       ...currentValues,
       [fieldKey]: value,
     }))
+  }
+
+  function selectForm(formCode: string) {
+    setSelectedFormCode(formCode)
+    setApplicationTitle('')
+    setDraftValues({})
+    createDraftMutation.reset()
+  }
+
+  function selectApplication(applicationId: string) {
+    setSelectedApplicationId(applicationId)
+    submitApplicationMutation.reset()
+    approveTaskMutation.reset()
+    rejectTaskMutation.reset()
   }
 
   function submitDraftApplication(event: FormEvent<HTMLFormElement>) {
@@ -296,6 +335,92 @@ function App() {
     rejectTaskMutation.mutate(taskId)
   }
 
+  function submitLogin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!loginUsername.trim() || !loginPassword) {
+      return
+    }
+
+    loginMutation.mutate({
+      username: loginUsername.trim(),
+      password: loginPassword,
+    })
+  }
+
+  function logout() {
+    clearAuthorization()
+    setAuthorization(null)
+    setSelectedApplicationId(undefined)
+    loginMutation.reset()
+    queryClient.clear()
+  }
+
+  if (!authorization || currentUserQuery.isError) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel" aria-label="ログイン">
+          <div className="login-brand">
+            <div className="brand-mark">W</div>
+            <div>
+              <p className="eyebrow">社内ワークフロー</p>
+              <h1>ログイン</h1>
+            </div>
+          </div>
+
+          <form className="login-form" onSubmit={submitLogin}>
+            <label className="draft-field">
+              <span>メールアドレス</span>
+              <input
+                autoComplete="username"
+                required
+                type="email"
+                value={loginUsername}
+                onChange={(event) => setLoginUsername(event.target.value)}
+              />
+            </label>
+            <label className="draft-field">
+              <span>パスワード</span>
+              <input
+                autoComplete="current-password"
+                required
+                type="password"
+                value={loginPassword}
+                onChange={(event) => setLoginPassword(event.target.value)}
+              />
+            </label>
+
+            {loginMutation.isError || currentUserQuery.isError ? (
+              <span className="draft-message error">ログイン情報を確認してください</span>
+            ) : null}
+
+            <button className="primary-button login-button" disabled={loginMutation.isPending}>
+              <LogIn size={16} aria-hidden="true" />
+              {loginMutation.isPending ? '確認中' : 'ログイン'}
+            </button>
+          </form>
+
+          <div className="login-demo-card">
+            <strong>デモアカウント</strong>
+            <span>{DEMO_USERNAME}</span>
+            <span>{DEMO_PASSWORD}</span>
+          </div>
+        </section>
+      </main>
+    )
+  }
+
+  if (currentUserQuery.isLoading) {
+    return (
+      <main className="login-shell">
+        <section className="login-panel login-loading" aria-label="認証確認">
+          <div className="brand-mark">W</div>
+          <strong>認証状態を確認中</strong>
+        </section>
+      </main>
+    )
+  }
+
   return (
     <main className="app-shell">
       <aside className="sidebar">
@@ -324,12 +449,22 @@ function App() {
             <h1>ワークフロー運用ダッシュボード</h1>
           </div>
           <div className="topbar-actions">
+            <div className="user-chip" aria-label="現在のユーザー">
+              <UserCircle size={18} aria-hidden="true" />
+              <div>
+                <strong>{currentUser?.name}</strong>
+                <span>{currentUser?.organizationName} / {currentUser?.positionName}</span>
+              </div>
+            </div>
             <label className="search">
               <Search size={17} aria-hidden="true" />
               <input aria-label="申請検索" placeholder="申請を検索" />
             </label>
             <button className="icon-button" aria-label="Notifications">
               <Bell size={18} aria-hidden="true" />
+            </button>
+            <button className="icon-button" aria-label="ログアウト" onClick={logout} title="ログアウト">
+              <LogOut size={18} aria-hidden="true" />
             </button>
           </div>
         </header>
@@ -385,7 +520,7 @@ function App() {
                         : 'table-row application-row'
                     }
                     key={application.id}
-                    onClick={() => setSelectedApplicationId(application.id)}
+                  onClick={() => selectApplication(application.id)}
                     type="button"
                   >
                     <strong>{application.title}</strong>
@@ -510,7 +645,7 @@ function App() {
                     <div className="approval-task-row" key={task.id}>
                       <button
                         className="approval-task-main"
-                        onClick={() => setSelectedApplicationId(task.applicationId)}
+                        onClick={() => selectApplication(task.applicationId)}
                         type="button"
                       >
                         <span>{task.stepName}</span>
@@ -563,7 +698,7 @@ function App() {
                   <span>申請書</span>
                   <select
                     value={activeFormCode ?? ''}
-                    onChange={(event) => setSelectedFormCode(event.target.value)}
+                    onChange={(event) => selectForm(event.target.value)}
                   >
                     {formDefinitions.map((formDefinition) => (
                       <option key={formDefinition.formCode} value={formDefinition.formCode}>
@@ -585,7 +720,7 @@ function App() {
 
                 <div className="draft-status-box">
                   <strong>{selectedForm?.workflowName ?? 'ワークフロー未選択'}</strong>
-                  <span>申請者：山田 太郎</span>
+                  <span>申請者：{currentUser?.name ?? '-'}</span>
                   <span>保存後ステータス：DRAFT</span>
                 </div>
               </div>
@@ -657,7 +792,7 @@ function App() {
                           : 'definition-option'
                       }
                       key={formDefinition.formCode}
-                      onClick={() => setSelectedFormCode(formDefinition.formCode)}
+                      onClick={() => selectForm(formDefinition.formCode)}
                       type="button"
                     >
                       <strong>{formDefinition.formName}</strong>

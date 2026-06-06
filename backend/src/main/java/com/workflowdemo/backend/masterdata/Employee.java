@@ -52,11 +52,11 @@ public class Employee {
         return email;
     }
 
-    String getOrganizationName() {
+    public String getOrganizationName() {
         return organizationName;
     }
 
-    String getPositionName() {
+    public String getPositionName() {
         return positionName;
     }
 

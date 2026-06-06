@@ -113,7 +113,41 @@ export type ApprovalTaskActionResponse = {
   history: ApplicationHistory
 }
 
-const DEMO_AUTHORIZATION_HEADER = `Basic ${btoa('demo1@growtea.co.jp:demo1001')}`
+export type CurrentUser = {
+  username: string
+  employeeCode: string
+  name: string
+  organizationName: string
+  positionName: string
+}
+
+const AUTH_STORAGE_KEY = 'workflowDemoAuthorization'
+
+export const DEMO_USERNAME = 'demo1@growtea.co.jp'
+export const DEMO_PASSWORD = 'demo1001'
+
+export function buildBasicAuthorization(username: string, password: string) {
+  return `Basic ${btoa(`${username}:${password}`)}`
+}
+
+export function getSavedAuthorization() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+  return window.localStorage.getItem(AUTH_STORAGE_KEY)
+}
+
+export function saveAuthorization(authorization: string) {
+  window.localStorage.setItem(AUTH_STORAGE_KEY, authorization)
+}
+
+export function clearAuthorization() {
+  window.localStorage.removeItem(AUTH_STORAGE_KEY)
+}
+
+function currentAuthorization() {
+  return getSavedAuthorization() ?? ''
+}
 
 async function getJson<T>(path: string, options: { authorization?: string } = {}): Promise<T> {
   const response = await fetch(path, {
@@ -170,39 +204,45 @@ export function getFormDefinition(formCode: string) {
   return getJson<FormDefinitionDetail>(`/api/form-definitions/${formCode}`)
 }
 
+export function getMe(authorization = currentAuthorization()) {
+  return getJson<CurrentUser>('/api/me', {
+    authorization,
+  })
+}
+
 export function getApplications() {
   return getJson<ApplicationSummary[]>('/api/applications', {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
 export function getApplication(id: string) {
   return getJson<ApplicationDetail>(`/api/applications/${id}`, {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
 export function getApplicationHistory(id: string) {
   return getJson<ApplicationHistory[]>(`/api/applications/${id}/history`, {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
 export function getPendingApprovalTasks() {
   return getJson<ApprovalTask[]>('/api/approval-tasks/pending', {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
 export function createDraftApplication(request: CreateDraftApplicationRequest) {
   return postJson<DraftApplication, CreateDraftApplicationRequest>('/api/applications/drafts', request, {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
 export function submitApplication(id: string) {
   return postJson<ApplicationDetail, Record<string, never>>(`/api/applications/${id}/submit`, {}, {
-    authorization: DEMO_AUTHORIZATION_HEADER,
+    authorization: currentAuthorization(),
   })
 }
 
@@ -210,7 +250,7 @@ export function approveApprovalTask(id: string) {
   return postJson<ApprovalTaskActionResponse, { comment: string }>(
     `/api/approval-tasks/${id}/approve`,
     { comment: '承認しました' },
-    { authorization: DEMO_AUTHORIZATION_HEADER },
+    { authorization: currentAuthorization() },
   )
 }
 
@@ -218,6 +258,6 @@ export function rejectApprovalTask(id: string) {
   return postJson<ApprovalTaskActionResponse, { comment: string }>(
     `/api/approval-tasks/${id}/reject`,
     { comment: '差戻し確認' },
-    { authorization: DEMO_AUTHORIZATION_HEADER },
+    { authorization: currentAuthorization() },
   )
 }
