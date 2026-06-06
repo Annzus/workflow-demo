@@ -11,6 +11,18 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+workflow:
+  storage:
+    minio:
+      endpoint: ${WORKFLOW_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${WORKFLOW_MINIO_ACCESS_KEY:workflow}
+      secret-key: ${WORKFLOW_MINIO_SECRET_KEY:workflow-secret}
+      bucket: ${WORKFLOW_MINIO_BUCKET:workflow-attachments}
 
 server:
   port: 8080

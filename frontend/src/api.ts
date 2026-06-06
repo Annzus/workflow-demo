@@ -92,6 +92,15 @@ export type ApplicationHistory = {
   createdAt: string
 }
 
+export type ApplicationAttachment = {
+  id: string
+  originalFilename: string
+  contentType: string
+  sizeBytes: number
+  uploadedByName: string
+  uploadedAt: string
+}
+
 export type ApprovalTask = {
   id: string
   applicationId: string
@@ -228,6 +237,12 @@ export function getApplicationHistory(id: string) {
   })
 }
 
+export function getApplicationAttachments(id: string) {
+  return getJson<ApplicationAttachment[]>(`/api/applications/${id}/attachments`, {
+    authorization: currentAuthorization(),
+  })
+}
+
 export function getPendingApprovalTasks() {
   return getJson<ApprovalTask[]>('/api/approval-tasks/pending', {
     authorization: currentAuthorization(),
@@ -238,6 +253,26 @@ export function createDraftApplication(request: CreateDraftApplicationRequest) {
   return postJson<DraftApplication, CreateDraftApplicationRequest>('/api/applications/drafts', request, {
     authorization: currentAuthorization(),
   })
+}
+
+export async function uploadApplicationAttachment(id: string, file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const authorization = currentAuthorization()
+
+  const response = await fetch(`/api/applications/${id}/attachments`, {
+    method: 'POST',
+    headers: {
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+
+  return response.json() as Promise<ApplicationAttachment>
 }
 
 export function submitApplication(id: string) {

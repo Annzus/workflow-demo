@@ -516,6 +516,96 @@ h2 {
   gap: 10px;
 }
 
+.attachment-block {
+  display: grid;
+  gap: 10px;
+}
+
+.attachment-upload {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.attachment-picker {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid #cfd8d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #17201b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.attachment-picker span {
+  min-width: 0;
+  color: #5b6f60;
+  font-size: 13px;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attachment-submit {
+  min-width: 86px;
+}
+
+.attachment-list {
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.attachment-row {
+  min-height: 56px;
+  padding: 10px 12px;
+  border-top: 1px solid #dfe5df;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(92px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.attachment-row:first-child {
+  border-top: 0;
+}
+
+.attachment-row strong,
+.attachment-row span,
+.attachment-row small {
+  display: block;
+}
+
+.attachment-row strong {
+  color: #17201b;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.attachment-row span,
+.attachment-row small {
+  color: #5b6f60;
+  font-size: 12px;
+}
+
+.attachment-row small {
+  text-align: right;
+}
+
 .history-header {
   display: flex;
   align-items: center;
@@ -1024,7 +1114,13 @@ textarea.preview-input {
   }
 
   .history-row,
-  .approval-task-row {
+  .approval-task-row,
+  .attachment-row,
+  .attachment-upload {
     grid-template-columns: 1fr;
+  }
+
+  .attachment-row small {
+    text-align: left;
   }
 }

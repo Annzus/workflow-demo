@@ -4,6 +4,7 @@ import {
   Bell,
   Check,
   ClipboardList,
+  FileUp,
   FileText,
   FileSpreadsheet,
   GitBranch,
@@ -28,6 +29,7 @@ import {
   DEMO_USERNAME,
   type FormField,
   getApplication,
+  getApplicationAttachments,
   getApplicationHistory,
   getApplications,
   getEmployees,
@@ -41,6 +43,7 @@ import {
   rejectApprovalTask,
   saveAuthorization,
   submitApplication,
+  uploadApplicationAttachment,
 } from './api'
 
 const navItems = [
@@ -94,6 +97,16 @@ function formatApplicationDate(value: string) {
   return dateTimeFormatter.format(new Date(value))
 }
 
+function formatFileSize(sizeBytes: number) {
+  if (sizeBytes < 1024) {
+    return `${sizeBytes} B`
+  }
+  if (sizeBytes < 1024 * 1024) {
+    return `${(sizeBytes / 1024).toFixed(1)} KB`
+  }
+  return `${(sizeBytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 function statusLabel(status: string) {
   if (status === 'DRAFT') {
     return '下書き'
@@ -132,6 +145,8 @@ function App() {
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>()
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null)
+  const [attachmentInputVersion, setAttachmentInputVersion] = useState(0)
   const currentUserQuery = useQuery({
     queryKey: ['me', authorization],
     queryFn: () => getMe(authorization ?? ''),
@@ -190,6 +205,11 @@ function App() {
     queryFn: () => getApplicationHistory(activeApplicationId ?? ''),
     enabled: isAuthenticated && Boolean(activeApplicationId),
   })
+  const applicationAttachmentsQuery = useQuery({
+    queryKey: ['applicationAttachments', activeApplicationId],
+    queryFn: () => getApplicationAttachments(activeApplicationId ?? ''),
+    enabled: isAuthenticated && Boolean(activeApplicationId),
+  })
   const isMasterDataLoading =
     employeesQuery.isLoading || organizationsQuery.isLoading || positionsQuery.isLoading
   const hasMasterDataError =
@@ -233,6 +253,7 @@ function App() {
   const selectedForm = selectedFormQuery.data
   const selectedApplication = selectedApplicationQuery.data
   const applicationHistory = applicationHistoryQuery.data ?? []
+  const applicationAttachments = applicationAttachmentsQuery.data ?? []
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const nextAuthorization = buildBasicAuthorization(credentials.username, credentials.password)
@@ -252,6 +273,15 @@ function App() {
     onSuccess: (savedApplication) => {
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
       selectApplication(savedApplication.id)
+    },
+  })
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: ({ applicationId, file }: { applicationId: string; file: File }) =>
+      uploadApplicationAttachment(applicationId, file),
+    onSuccess: (_, variables) => {
+      setAttachmentFile(null)
+      setAttachmentInputVersion((version) => version + 1)
+      void queryClient.invalidateQueries({ queryKey: ['applicationAttachments', variables.applicationId] })
     },
   })
   const submitApplicationMutation = useMutation({
@@ -300,6 +330,9 @@ function App() {
 
   function selectApplication(applicationId: string) {
     setSelectedApplicationId(applicationId)
+    setAttachmentFile(null)
+    setAttachmentInputVersion((version) => version + 1)
+    uploadAttachmentMutation.reset()
     submitApplicationMutation.reset()
     approveTaskMutation.reset()
     rejectTaskMutation.reset()
@@ -335,6 +368,19 @@ function App() {
     rejectTaskMutation.mutate(taskId)
   }
 
+  function submitAttachment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!activeApplicationId || !attachmentFile) {
+      return
+    }
+
+    uploadAttachmentMutation.mutate({
+      applicationId: activeApplicationId,
+      file: attachmentFile,
+    })
+  }
+
   function submitLogin(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
 
@@ -352,6 +398,8 @@ function App() {
     clearAuthorization()
     setAuthorization(null)
     setSelectedApplicationId(undefined)
+    setAttachmentFile(null)
+    setAttachmentInputVersion((version) => version + 1)
     loginMutation.reset()
     queryClient.clear()
   }
@@ -566,6 +614,61 @@ function App() {
                       <strong>{fieldValue.value || '-'}</strong>
                     </div>
                   ))}
+                </div>
+                <div className="attachment-block">
+                  <div className="history-header">
+                    <strong>添付ファイル</strong>
+                    <span>{applicationAttachments.length}件</span>
+                  </div>
+                  <form className="attachment-upload" onSubmit={submitAttachment}>
+                    <label className="attachment-picker">
+                      <FileUp size={16} aria-hidden="true" />
+                      <span>{attachmentFile?.name ?? 'ファイルを選択'}</span>
+                      <input
+                        key={attachmentInputVersion}
+                        aria-label="添付ファイル"
+                        type="file"
+                        onChange={(event) => setAttachmentFile(event.target.files?.[0] ?? null)}
+                      />
+                    </label>
+                    <button
+                      className="primary-button attachment-submit"
+                      disabled={!attachmentFile || uploadAttachmentMutation.isPending}
+                      type="submit"
+                    >
+                      {uploadAttachmentMutation.isPending ? 'アップロード中' : '追加'}
+                    </button>
+                  </form>
+                  {uploadAttachmentMutation.isError ? (
+                    <span className="draft-message error">添付ファイルを保存できません</span>
+                  ) : null}
+                  {uploadAttachmentMutation.isSuccess ? (
+                    <span className="draft-message">添付ファイルを保存しました</span>
+                  ) : null}
+                  {applicationAttachmentsQuery.isError ? (
+                    <div className="compact-row compact-row-muted">添付ファイルを取得できません</div>
+                  ) : applicationAttachmentsQuery.isLoading ? (
+                    <div className="compact-row">添付ファイルを読込中</div>
+                  ) : applicationAttachments.length === 0 ? (
+                    <div className="compact-row">添付ファイルはありません</div>
+                  ) : (
+                    <div className="attachment-list">
+                      {applicationAttachments.map((attachment) => (
+                        <div className="attachment-row" key={attachment.id}>
+                          <FileText size={16} aria-hidden="true" />
+                          <div>
+                            <strong>{attachment.originalFilename}</strong>
+                            <span>
+                              {attachment.contentType} / {formatFileSize(attachment.sizeBytes)}
+                            </span>
+                          </div>
+                          <small>
+                            {attachment.uploadedByName} / {formatApplicationDate(attachment.uploadedAt)}
+                          </small>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="detail-action-bar">
                   {submitApplicationMutation.isError ? (
