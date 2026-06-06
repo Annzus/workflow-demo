@@ -210,6 +210,10 @@ h2 {
   margin-top: 14px;
 }
 
+.approval-grid {
+  margin-top: 14px;
+}
+
 .draft-grid {
   margin-top: 14px;
 }
@@ -415,6 +419,143 @@ h2 {
   font-weight: 800;
   display: inline-flex;
   align-items: center;
+}
+
+.history-block {
+  display: grid;
+  gap: 10px;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.history-header strong {
+  color: #17201b;
+  font-size: 14px;
+}
+
+.history-header span {
+  color: #5b6f60;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-list {
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.history-row {
+  min-height: 50px;
+  padding: 9px 12px;
+  border-top: 1px solid #dfe5df;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 54px minmax(82px, 0.8fr) minmax(120px, 1fr) 76px;
+  gap: 8px;
+  align-items: center;
+}
+
+.history-row:first-child {
+  border-top: 0;
+}
+
+.history-row span {
+  color: #334313;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.history-row strong {
+  color: #17201b;
+  font-size: 13px;
+}
+
+.history-row small,
+.history-row time {
+  color: #5b6f60;
+  font-size: 12px;
+}
+
+.approval-task-list {
+  margin-top: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.approval-task-row {
+  min-height: 72px;
+  padding: 10px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  background: #fbfcfb;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.approval-task-main {
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.approval-task-main span {
+  color: #334313;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.approval-task-main strong {
+  color: #17201b;
+  font-size: 14px;
+}
+
+.approval-task-main small {
+  color: #5b6f60;
+  font-size: 12px;
+}
+
+.approval-task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-action {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #cfd8d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #17201b;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-action.approve {
+  background: #e7f2d0;
+  color: #334313;
+}
+
+.icon-action.reject {
+  background: #fff8f6;
+  color: #8b4b3f;
+}
+
+.icon-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
 }
 
 .flow-preview {
@@ -781,5 +922,10 @@ textarea.preview-input {
   .table-row {
     grid-template-columns: 1fr;
     padding: 12px;
+  }
+
+  .history-row,
+  .approval-task-row {
+    grid-template-columns: 1fr;
   }
 }

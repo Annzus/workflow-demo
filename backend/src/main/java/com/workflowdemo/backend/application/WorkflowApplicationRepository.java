@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
-interface WorkflowApplicationRepository extends JpaRepository<WorkflowApplication, UUID> {
+public interface WorkflowApplicationRepository extends JpaRepository<WorkflowApplication, UUID> {
 
     List<WorkflowApplication> findByApplicantEmployeeIdOrderByCreatedAtDesc(UUID applicantEmployeeId);
 }

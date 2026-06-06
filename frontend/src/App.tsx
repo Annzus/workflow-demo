@@ -2,6 +2,7 @@ import { type FormEvent, useEffect, useState } from 'react'
 import {
   BadgeCheck,
   Bell,
+  Check,
   ClipboardList,
   FileText,
   FileSpreadsheet,
@@ -11,19 +12,24 @@ import {
   Send,
   Settings,
   Users,
+  X,
 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import './App.css'
 import {
+  approveApprovalTask,
   createDraftApplication,
   type FormField,
   getApplication,
+  getApplicationHistory,
   getApplications,
   getEmployees,
   getFormDefinition,
   getFormDefinitions,
   getOrganizations,
+  getPendingApprovalTasks,
   getPositions,
+  rejectApprovalTask,
   submitApplication,
 } from './api'
 
@@ -94,6 +100,19 @@ function statusLabel(status: string) {
   return status
 }
 
+function historyActionLabel(action: string) {
+  if (action === 'SUBMIT') {
+    return '提出'
+  }
+  if (action === 'APPROVE') {
+    return '承認'
+  }
+  if (action === 'REJECT') {
+    return '否認'
+  }
+  return action
+}
+
 function App() {
   const queryClient = useQueryClient()
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
@@ -120,12 +139,17 @@ function App() {
     queryKey: ['applications'],
     queryFn: getApplications,
   })
+  const approvalTasksQuery = useQuery({
+    queryKey: ['approvalTasks'],
+    queryFn: getPendingApprovalTasks,
+  })
 
   const employees = employeesQuery.data ?? []
   const organizations = organizationsQuery.data ?? []
   const positions = positionsQuery.data ?? []
   const formDefinitions = formDefinitionsQuery.data ?? []
   const workflowApplications = applicationsQuery.data ?? []
+  const approvalTasks = approvalTasksQuery.data ?? []
   const activeFormCode = selectedFormCode ?? formDefinitions[0]?.formCode
   const activeApplicationId = selectedApplicationId ?? workflowApplications[0]?.id
   const selectedFormQuery = useQuery({
@@ -136,6 +160,11 @@ function App() {
   const selectedApplicationQuery = useQuery({
     queryKey: ['application', activeApplicationId],
     queryFn: () => getApplication(activeApplicationId ?? ''),
+    enabled: Boolean(activeApplicationId),
+  })
+  const applicationHistoryQuery = useQuery({
+    queryKey: ['applicationHistory', activeApplicationId],
+    queryFn: () => getApplicationHistory(activeApplicationId ?? ''),
     enabled: Boolean(activeApplicationId),
   })
   const isMasterDataLoading =
@@ -173,8 +202,14 @@ function App() {
     : applicationsQuery.isLoading
       ? '読込中'
       : `${workflowApplications.length}件`
+  const approvalTaskCountLabel = approvalTasksQuery.isError
+    ? '取得エラー'
+    : approvalTasksQuery.isLoading
+      ? '読込中'
+      : `${approvalTasks.length}件`
   const selectedForm = selectedFormQuery.data
   const selectedApplication = selectedApplicationQuery.data
+  const applicationHistory = applicationHistoryQuery.data ?? []
   const createDraftMutation = useMutation({
     mutationFn: createDraftApplication,
     onSuccess: (savedApplication) => {
@@ -187,6 +222,28 @@ function App() {
     onSuccess: (submittedApplication) => {
       queryClient.setQueryData(['application', submittedApplication.id], submittedApplication)
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['applicationHistory', submittedApplication.id] })
+    },
+  })
+  const approveTaskMutation = useMutation({
+    mutationFn: approveApprovalTask,
+    onSuccess: (result) => {
+      setSelectedApplicationId(result.applicationId)
+      void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      void queryClient.invalidateQueries({ queryKey: ['application', result.applicationId] })
+      void queryClient.invalidateQueries({ queryKey: ['applicationHistory', result.applicationId] })
+    },
+  })
+  const rejectTaskMutation = useMutation({
+    mutationFn: rejectApprovalTask,
+    onSuccess: (result) => {
+      setSelectedApplicationId(result.applicationId)
+      void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
+      void queryClient.invalidateQueries({ queryKey: ['applications'] })
+      void queryClient.invalidateQueries({ queryKey: ['application', result.applicationId] })
+      void queryClient.invalidateQueries({ queryKey: ['applicationHistory', result.applicationId] })
     },
   })
 
@@ -198,6 +255,8 @@ function App() {
 
   useEffect(() => {
     submitApplicationMutation.reset()
+    approveTaskMutation.reset()
+    rejectTaskMutation.reset()
   }, [activeApplicationId])
 
   function updateDraftValue(fieldKey: string, value: string) {
@@ -227,6 +286,14 @@ function App() {
     }
 
     submitApplicationMutation.mutate(selectedApplication.id)
+  }
+
+  function approveTask(taskId: string) {
+    approveTaskMutation.mutate(taskId)
+  }
+
+  function rejectTask(taskId: string) {
+    rejectTaskMutation.mutate(taskId)
   }
 
   return (
@@ -270,8 +337,8 @@ function App() {
         <section className="summary-grid" aria-label="Workflow summary">
           <article>
             <span>確認待ち</span>
-            <strong>8</strong>
-            <small>本日期限 3件</small>
+            <strong>{approvalTasksQuery.isLoading ? '-' : approvalTasks.length}</strong>
+            <small>{approvalTasksQuery.isError ? '取得エラー' : '承認タスク'}</small>
           </article>
           <article>
             <span>申請中</span>
@@ -386,9 +453,96 @@ function App() {
                     <span className="detail-state-note">提出済み</span>
                   )}
                 </div>
+                <div className="history-block">
+                  <div className="history-header">
+                    <strong>承認履歴</strong>
+                    <span>{applicationHistory.length}件</span>
+                  </div>
+                  {applicationHistoryQuery.isError ? (
+                    <div className="compact-row compact-row-muted">承認履歴を取得できません</div>
+                  ) : applicationHistoryQuery.isLoading ? (
+                    <div className="compact-row">承認履歴を読込中</div>
+                  ) : applicationHistory.length === 0 ? (
+                    <div className="compact-row">まだ履歴はありません</div>
+                  ) : (
+                    <div className="history-list">
+                      {applicationHistory.map((history) => (
+                        <div className="history-row" key={history.id}>
+                          <span>{historyActionLabel(history.action)}</span>
+                          <strong>{history.actorName}</strong>
+                          <small>{history.comment || '-'}</small>
+                          <time>{formatApplicationDate(history.createdAt)}</time>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="compact-row">申請を選択してください</div>
+            )}
+          </article>
+        </section>
+
+        <section className="approval-grid" aria-label="承認タスク">
+          <article className="panel approval-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">承認タスク</p>
+                <h2>確認待ちの申請</h2>
+              </div>
+              <span className="count-label">{approvalTaskCountLabel}</span>
+            </div>
+
+            {approvalTasksQuery.isError ? (
+              <div className="compact-row compact-row-muted">承認タスクを取得できません</div>
+            ) : approvalTasksQuery.isLoading ? (
+              <div className="compact-row">承認タスクを読込中</div>
+            ) : approvalTasks.length === 0 ? (
+              <div className="compact-row">現在の承認待ちはありません</div>
+            ) : (
+              <div className="approval-task-list">
+                {approvalTasks.map((task) => {
+                  const isActing =
+                    (approveTaskMutation.isPending && approveTaskMutation.variables === task.id) ||
+                    (rejectTaskMutation.isPending && rejectTaskMutation.variables === task.id)
+                  return (
+                    <div className="approval-task-row" key={task.id}>
+                      <button
+                        className="approval-task-main"
+                        onClick={() => setSelectedApplicationId(task.applicationId)}
+                        type="button"
+                      >
+                        <span>{task.stepName}</span>
+                        <strong>{task.title}</strong>
+                        <small>
+                          {task.formName} / 期限 {task.dueDate ?? '-'}
+                        </small>
+                      </button>
+                      <div className="approval-task-actions">
+                        <button
+                          className="icon-action approve"
+                          disabled={isActing}
+                          onClick={() => approveTask(task.id)}
+                          title="承認"
+                          type="button"
+                        >
+                          <Check size={16} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="icon-action reject"
+                          disabled={isActing}
+                          onClick={() => rejectTask(task.id)}
+                          title="否認"
+                          type="button"
+                        >
+                          <X size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             )}
           </article>
         </section>

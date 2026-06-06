@@ -135,6 +135,70 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.message").value("Only draft applications can be submitted"));
 	}
 
+	@Test
+	void submitApplicationCreatesPendingApprovalTaskAndHistory() throws Exception {
+		String id = submitTravelDraft("承認タスク確認");
+
+		mockMvc.perform(get("/api/approval-tasks/pending")
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].applicationId").value(id))
+			.andExpect(jsonPath("$[0].title").value("承認タスク確認"))
+			.andExpect(jsonPath("$[0].status").value("PENDING"))
+			.andExpect(jsonPath("$[0].approverName").value("岩瀬 大樹"));
+
+		mockMvc.perform(get("/api/applications/{id}/history", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].action").value("SUBMIT"))
+			.andExpect(jsonPath("$[0].actorName").value("山田 太郎"));
+	}
+
+	@Test
+	void approvePendingTaskChangesApplicationToApproved() throws Exception {
+		String applicationId = submitTravelDraft("承認確認");
+		String taskId = pendingTaskIdForApplication(applicationId);
+
+		mockMvc.perform(post("/api/approval-tasks/{id}/approve", taskId)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "comment": "内容を確認しました"
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.applicationId").value(applicationId))
+			.andExpect(jsonPath("$.applicationStatus").value("APPROVED"))
+			.andExpect(jsonPath("$.taskStatus").value("APPROVED"))
+			.andExpect(jsonPath("$.history.action").value("APPROVE"));
+
+		mockMvc.perform(get("/api/applications/{id}", applicationId)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("APPROVED"));
+	}
+
+	@Test
+	void rejectPendingTaskChangesApplicationToRejected() throws Exception {
+		String applicationId = submitTravelDraft("否認確認");
+		String taskId = pendingTaskIdForApplication(applicationId);
+
+		mockMvc.perform(post("/api/approval-tasks/{id}/reject", taskId)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "comment": "差戻し確認"
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.applicationId").value(applicationId))
+			.andExpect(jsonPath("$.applicationStatus").value("REJECTED"))
+			.andExpect(jsonPath("$.taskStatus").value("REJECTED"))
+			.andExpect(jsonPath("$.history.action").value("REJECT"));
+	}
+
 	private String createTravelDraft(String title) throws Exception {
 		MvcResult result = mockMvc.perform(post("/api/applications/drafts")
 				.with(httpBasic("demo1@growtea.co.jp", "demo1001"))
@@ -158,6 +222,30 @@ class BackendApplicationTests {
 
 		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
 		return response.get("id").asText();
+	}
+
+	private String submitTravelDraft(String title) throws Exception {
+		String id = createTravelDraft(title);
+		mockMvc.perform(post("/api/applications/{id}/submit", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("SUBMITTED"));
+		return id;
+	}
+
+	private String pendingTaskIdForApplication(String applicationId) throws Exception {
+		MvcResult result = mockMvc.perform(get("/api/approval-tasks/pending")
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andReturn();
+
+		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+		for (JsonNode task : response) {
+			if (applicationId.equals(task.get("applicationId").asText())) {
+				return task.get("id").asText();
+			}
+		}
+		throw new AssertionError("Pending task not found for application " + applicationId);
 	}
 
 }

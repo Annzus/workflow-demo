@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "applications")
-class WorkflowApplication {
+public class WorkflowApplication {
 
     @Id
     private UUID id;
@@ -51,7 +51,7 @@ class WorkflowApplication {
         this.createdAt = now;
     }
 
-    void submit() {
+    public void submit() {
         if (!"DRAFT".equals(status)) {
             throw new IllegalStateException("Only draft applications can be submitted");
         }
@@ -59,35 +59,49 @@ class WorkflowApplication {
         this.submittedAt = Instant.now();
     }
 
-    UUID getId() {
+    public void approve() {
+        if (!"SUBMITTED".equals(status)) {
+            throw new IllegalStateException("Only submitted applications can be approved");
+        }
+        this.status = "APPROVED";
+    }
+
+    public void reject() {
+        if (!"SUBMITTED".equals(status)) {
+            throw new IllegalStateException("Only submitted applications can be rejected");
+        }
+        this.status = "REJECTED";
+    }
+
+    public UUID getId() {
         return id;
     }
 
-    UUID getFormDefinitionId() {
+    public UUID getFormDefinitionId() {
         return formDefinitionId;
     }
 
-    String getApplicationNumber() {
+    public String getApplicationNumber() {
         return applicationNumber;
     }
 
-    String getTitle() {
+    public String getTitle() {
         return title;
     }
 
-    UUID getApplicantEmployeeId() {
+    public UUID getApplicantEmployeeId() {
         return applicantEmployeeId;
     }
 
-    String getStatus() {
+    public String getStatus() {
         return status;
     }
 
-    Instant getSubmittedAt() {
+    public Instant getSubmittedAt() {
         return submittedAt;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }

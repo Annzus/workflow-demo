@@ -84,6 +84,35 @@ export type ApplicationDetail = ApplicationSummary & {
   values: ApplicationFieldValue[]
 }
 
+export type ApplicationHistory = {
+  id: string
+  actorName: string
+  action: string
+  comment: string
+  createdAt: string
+}
+
+export type ApprovalTask = {
+  id: string
+  applicationId: string
+  applicationNumber: string
+  title: string
+  formName: string
+  approverName: string
+  stepName: string
+  status: string
+  dueDate: string | null
+  createdAt: string
+}
+
+export type ApprovalTaskActionResponse = {
+  taskId: string
+  applicationId: string
+  applicationStatus: string
+  taskStatus: string
+  history: ApplicationHistory
+}
+
 const DEMO_AUTHORIZATION_HEADER = `Basic ${btoa('demo1@growtea.co.jp:demo1001')}`
 
 async function getJson<T>(path: string, options: { authorization?: string } = {}): Promise<T> {
@@ -153,6 +182,18 @@ export function getApplication(id: string) {
   })
 }
 
+export function getApplicationHistory(id: string) {
+  return getJson<ApplicationHistory[]>(`/api/applications/${id}/history`, {
+    authorization: DEMO_AUTHORIZATION_HEADER,
+  })
+}
+
+export function getPendingApprovalTasks() {
+  return getJson<ApprovalTask[]>('/api/approval-tasks/pending', {
+    authorization: DEMO_AUTHORIZATION_HEADER,
+  })
+}
+
 export function createDraftApplication(request: CreateDraftApplicationRequest) {
   return postJson<DraftApplication, CreateDraftApplicationRequest>('/api/applications/drafts', request, {
     authorization: DEMO_AUTHORIZATION_HEADER,
@@ -163,4 +204,20 @@ export function submitApplication(id: string) {
   return postJson<ApplicationDetail, Record<string, never>>(`/api/applications/${id}/submit`, {}, {
     authorization: DEMO_AUTHORIZATION_HEADER,
   })
+}
+
+export function approveApprovalTask(id: string) {
+  return postJson<ApprovalTaskActionResponse, { comment: string }>(
+    `/api/approval-tasks/${id}/approve`,
+    { comment: '承認しました' },
+    { authorization: DEMO_AUTHORIZATION_HEADER },
+  )
+}
+
+export function rejectApprovalTask(id: string) {
+  return postJson<ApprovalTaskActionResponse, { comment: string }>(
+    `/api/approval-tasks/${id}/reject`,
+    { comment: '差戻し確認' },
+    { authorization: DEMO_AUTHORIZATION_HEADER },
+  )
 }

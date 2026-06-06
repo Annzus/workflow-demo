@@ -6,6 +6,10 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.workflowdemo.backend.approval.ApprovalHistory;
+import com.workflowdemo.backend.approval.ApprovalHistoryRepository;
+import com.workflowdemo.backend.approval.ApprovalTask;
+import com.workflowdemo.backend.approval.ApprovalTaskRepository;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinition;
 import com.workflowdemo.backend.formdefinition.ApplicationFormDefinitionRepository;
 import com.workflowdemo.backend.formdefinition.ApplicationFormField;
@@ -33,25 +37,32 @@ import org.springframework.web.server.ResponseStatusException;
 class ApplicationController {
 
     private static final String DEMO_APPLICANT_EMPLOYEE_CODE = "1001";
+    private static final String DEMO_APPROVER_EMPLOYEE_CODE = "1005";
 
     private final ApplicationFormDefinitionRepository formDefinitionRepository;
     private final ApplicationFormFieldRepository formFieldRepository;
     private final EmployeeRepository employeeRepository;
     private final WorkflowApplicationRepository applicationRepository;
     private final ApplicationFieldValueRepository fieldValueRepository;
+    private final ApprovalTaskRepository approvalTaskRepository;
+    private final ApprovalHistoryRepository approvalHistoryRepository;
 
     ApplicationController(
         ApplicationFormDefinitionRepository formDefinitionRepository,
         ApplicationFormFieldRepository formFieldRepository,
         EmployeeRepository employeeRepository,
         WorkflowApplicationRepository applicationRepository,
-        ApplicationFieldValueRepository fieldValueRepository
+        ApplicationFieldValueRepository fieldValueRepository,
+        ApprovalTaskRepository approvalTaskRepository,
+        ApprovalHistoryRepository approvalHistoryRepository
     ) {
         this.formDefinitionRepository = formDefinitionRepository;
         this.formFieldRepository = formFieldRepository;
         this.employeeRepository = employeeRepository;
         this.applicationRepository = applicationRepository;
         this.fieldValueRepository = fieldValueRepository;
+        this.approvalTaskRepository = approvalTaskRepository;
+        this.approvalHistoryRepository = approvalHistoryRepository;
     }
 
     @GetMapping
@@ -131,6 +142,7 @@ class ApplicationController {
     @Transactional
     ApplicationDetailResponse submitApplication(@PathVariable UUID id) {
         Employee applicant = demoApplicant();
+        Employee approver = demoApprover();
         WorkflowApplication application = applicationRepository.findById(id)
             .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
@@ -143,10 +155,26 @@ class ApplicationController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
         }
 
+        approvalTaskRepository.save(new ApprovalTask(application.getId(), approver, "部長承認"));
+        approvalHistoryRepository.save(new ApprovalHistory(application.getId(), applicant, "SUBMIT", "申請を提出"));
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
 
         return ApplicationDetailResponse.from(application, formDefinition, applicant, fieldValues);
+    }
+
+    @GetMapping("/{id}/history")
+    @Transactional(readOnly = true)
+    List<ApplicationHistoryResponse> applicationHistory(@PathVariable UUID id) {
+        Employee applicant = demoApplicant();
+        WorkflowApplication application = applicationRepository.findById(id)
+            .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
+
+        return approvalHistoryRepository.findByApplicationIdOrderByCreatedAtAsc(application.getId())
+            .stream()
+            .map(ApplicationHistoryResponse::from)
+            .toList();
     }
 
     private static void validateRequiredFields(List<ApplicationFormField> fields, Map<String, String> values) {
@@ -162,6 +190,11 @@ class ApplicationController {
     private Employee demoApplicant() {
         return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPLICANT_EMPLOYEE_CODE)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo applicant not found"));
+    }
+
+    private Employee demoApprover() {
+        return employeeRepository.findByEmployeeCodeAndActiveTrue(DEMO_APPROVER_EMPLOYEE_CODE)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Demo approver not found"));
     }
 
     private static String normalizeValue(String value) {
@@ -259,6 +292,24 @@ class ApplicationController {
                 fieldValue.getDataType(),
                 fieldValue.getValueText(),
                 fieldValue.getDisplayOrder()
+            );
+        }
+    }
+
+    record ApplicationHistoryResponse(
+        UUID id,
+        String actorName,
+        String action,
+        String comment,
+        String createdAt
+    ) {
+        static ApplicationHistoryResponse from(ApprovalHistory history) {
+            return new ApplicationHistoryResponse(
+                history.getId(),
+                history.getActorName(),
+                history.getAction(),
+                history.getComment(),
+                history.getCreatedAt().toString()
             );
         }
     }
