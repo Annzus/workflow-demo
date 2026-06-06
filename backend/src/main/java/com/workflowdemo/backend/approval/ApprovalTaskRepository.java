@@ -10,5 +10,7 @@ public interface ApprovalTaskRepository extends JpaRepository<ApprovalTask, UUID
 
     List<ApprovalTask> findByApproverEmployeeIdAndStatusOrderByCreatedAtDesc(UUID approverEmployeeId, String status);
 
+    List<ApprovalTask> findByApplicationIdOrderByCreatedAtAsc(UUID applicationId);
+
     Optional<ApprovalTask> findByApplicationIdAndStatus(UUID applicationId, String status);
 }

@@ -136,6 +136,22 @@ function historyActionLabel(action: string) {
   return action
 }
 
+function routeStatusLabel(status: string) {
+  if (status === 'COMPLETED') {
+    return '完了'
+  }
+  if (status === 'CURRENT') {
+    return '対応中'
+  }
+  if (status === 'REJECTED') {
+    return '差戻し'
+  }
+  if (status === 'WAITING') {
+    return '待機'
+  }
+  return status
+}
+
 function App() {
   const queryClient = useQueryClient()
   const [authorization, setAuthorization] = useState<string | null>(() => getSavedAuthorization())
@@ -254,6 +270,7 @@ function App() {
   const selectedApplication = selectedApplicationQuery.data
   const applicationHistory = applicationHistoryQuery.data ?? []
   const applicationAttachments = applicationAttachmentsQuery.data ?? []
+  const selectedApprovalRoute = selectedApplication?.approvalRoute ?? []
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const nextAuthorization = buildBasicAuthorization(credentials.username, credentials.password)
@@ -614,6 +631,30 @@ function App() {
                       <strong>{fieldValue.value || '-'}</strong>
                     </div>
                   ))}
+                </div>
+                <div className="approval-route-block">
+                  <div className="history-header">
+                    <strong>承認ルート</strong>
+                    <span>{selectedApprovalRoute.length}ステップ</span>
+                  </div>
+                  <div className="approval-route-list">
+                    {selectedApprovalRoute.map((step) => (
+                      <div className={`approval-route-step ${step.status.toLowerCase()}`} key={step.stepKey}>
+                        <span className="route-marker" aria-hidden="true" />
+                        <div className="route-main">
+                          <strong>{step.stepName}</strong>
+                          <span>
+                            {step.actorName || step.roleName}
+                            {step.actorName && step.roleName ? ` / ${step.roleName}` : ''}
+                          </span>
+                        </div>
+                        <div className="route-status">
+                          <em>{routeStatusLabel(step.status)}</em>
+                          <small>{step.completedAt ? formatApplicationDate(step.completedAt) : '-'}</small>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="attachment-block">
                   <div className="history-header">

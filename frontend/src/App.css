@@ -516,6 +516,95 @@ h2 {
   gap: 10px;
 }
 
+.approval-route-block {
+  display: grid;
+  gap: 10px;
+}
+
+.approval-route-list {
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.approval-route-step {
+  min-height: 58px;
+  padding: 10px 12px;
+  border-top: 1px solid #dfe5df;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) minmax(72px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.approval-route-step:first-child {
+  border-top: 0;
+}
+
+.route-marker {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #aebbb0;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.approval-route-step.completed .route-marker {
+  border-color: #5f7f2f;
+  background: #d5f05d;
+}
+
+.approval-route-step.current .route-marker {
+  border-color: #287b70;
+  background: #287b70;
+  box-shadow: 0 0 0 4px rgba(40, 123, 112, 0.14);
+}
+
+.approval-route-step.rejected .route-marker {
+  border-color: #9c4f42;
+  background: #c86b5c;
+}
+
+.route-main {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.route-main strong {
+  color: #17201b;
+  font-size: 13px;
+}
+
+.route-main span {
+  color: #5b6f60;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.route-status {
+  display: grid;
+  gap: 3px;
+  justify-items: end;
+}
+
+.route-status em {
+  font-style: normal;
+  color: #334313;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.route-status small {
+  color: #5b6f60;
+  font-size: 12px;
+}
+
+.approval-route-step.rejected .route-status em {
+  color: #8b4b3f;
+}
+
 .attachment-block {
   display: grid;
   gap: 10px;
@@ -1115,9 +1204,14 @@ textarea.preview-input {
 
   .history-row,
   .approval-task-row,
+  .approval-route-step,
   .attachment-row,
   .attachment-upload {
     grid-template-columns: 1fr;
+  }
+
+  .route-status {
+    justify-items: start;
   }
 
   .attachment-row small {

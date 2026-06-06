@@ -99,8 +99,17 @@ class ApplicationController {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
+        List<ApprovalTask> approvalTasks = approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
+            application.getId()
+        );
 
-        return ApplicationDetailResponse.from(application, formDefinition, applicant, fieldValues);
+        return ApplicationDetailResponse.from(
+            application,
+            formDefinition,
+            applicant,
+            fieldValues,
+            buildApprovalRoute(application, applicant, demoApprover(), approvalTasks)
+        );
     }
 
     @PostMapping("/drafts")
@@ -159,8 +168,17 @@ class ApplicationController {
         approvalHistoryRepository.save(new ApprovalHistory(application.getId(), applicant, "SUBMIT", "申請を提出"));
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
+        List<ApprovalTask> approvalTasks = approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
+            application.getId()
+        );
 
-        return ApplicationDetailResponse.from(application, formDefinition, applicant, fieldValues);
+        return ApplicationDetailResponse.from(
+            application,
+            formDefinition,
+            applicant,
+            fieldValues,
+            buildApprovalRoute(application, applicant, approver, approvalTasks)
+        );
     }
 
     @GetMapping("/{id}/history")
@@ -199,6 +217,85 @@ class ApplicationController {
 
     private static String normalizeValue(String value) {
         return value == null ? "" : value.trim();
+    }
+
+    private static List<ApprovalRouteStepResponse> buildApprovalRoute(
+        WorkflowApplication application,
+        Employee applicant,
+        Employee fallbackApprover,
+        List<ApprovalTask> approvalTasks
+    ) {
+        ApprovalTask approvalTask = approvalTasks.isEmpty() ? null : approvalTasks.getFirst();
+        String approverName = approvalTask == null ? fallbackApprover.getName() : approvalTask.getApproverName();
+        String approvalStepName = approvalTask == null ? "部長承認" : approvalTask.getStepName();
+
+        return List.of(
+            new ApprovalRouteStepResponse(
+                "applicant",
+                "申請者",
+                applicant.getName(),
+                applicant.getPositionName(),
+                applicantStepStatus(application.getStatus()),
+                application.getSubmittedAt() == null ? null : application.getSubmittedAt().toString()
+            ),
+            new ApprovalRouteStepResponse(
+                "manager_approval",
+                approvalStepName,
+                approverName,
+                "承認者",
+                approvalStepStatus(application.getStatus(), approvalTask),
+                approvalTask == null || approvalTask.getCompletedAt() == null
+                    ? null
+                    : approvalTask.getCompletedAt().toString()
+            ),
+            new ApprovalRouteStepResponse(
+                "finish",
+                "完了",
+                "",
+                "最終状態",
+                finalStepStatus(application.getStatus()),
+                finalCompletedAt(application, approvalTask)
+            )
+        );
+    }
+
+    private static String applicantStepStatus(String applicationStatus) {
+        return "DRAFT".equals(applicationStatus) ? "CURRENT" : "COMPLETED";
+    }
+
+    private static String approvalStepStatus(String applicationStatus, ApprovalTask approvalTask) {
+        if ("REJECTED".equals(applicationStatus)) {
+            return "REJECTED";
+        }
+        if ("APPROVED".equals(applicationStatus)) {
+            return "COMPLETED";
+        }
+        if ("SUBMITTED".equals(applicationStatus)) {
+            if (approvalTask == null) {
+                return "WAITING";
+            }
+            return "PENDING".equals(approvalTask.getStatus()) ? "CURRENT" : "COMPLETED";
+        }
+        return "WAITING";
+    }
+
+    private static String finalStepStatus(String applicationStatus) {
+        if ("APPROVED".equals(applicationStatus)) {
+            return "COMPLETED";
+        }
+        if ("REJECTED".equals(applicationStatus)) {
+            return "REJECTED";
+        }
+        return "WAITING";
+    }
+
+    private static String finalCompletedAt(WorkflowApplication application, ApprovalTask approvalTask) {
+        if (!"APPROVED".equals(application.getStatus()) && !"REJECTED".equals(application.getStatus())) {
+            return null;
+        }
+        return approvalTask == null || approvalTask.getCompletedAt() == null
+            ? null
+            : approvalTask.getCompletedAt().toString();
     }
 
     record CreateDraftApplicationRequest(
@@ -256,13 +353,15 @@ class ApplicationController {
         String formName,
         String createdAt,
         String submittedAt,
-        List<ApplicationFieldValueResponse> values
+        List<ApplicationFieldValueResponse> values,
+        List<ApprovalRouteStepResponse> approvalRoute
     ) {
         static ApplicationDetailResponse from(
             WorkflowApplication application,
             ApplicationFormDefinition formDefinition,
             Employee applicant,
-            List<ApplicationFieldValue> fieldValues
+            List<ApplicationFieldValue> fieldValues,
+            List<ApprovalRouteStepResponse> approvalRoute
         ) {
             return new ApplicationDetailResponse(
                 application.getId(),
@@ -273,9 +372,20 @@ class ApplicationController {
                 formDefinition.getFormName(),
                 application.getCreatedAt().toString(),
                 application.getSubmittedAt() == null ? null : application.getSubmittedAt().toString(),
-                fieldValues.stream().map(ApplicationFieldValueResponse::from).toList()
+                fieldValues.stream().map(ApplicationFieldValueResponse::from).toList(),
+                approvalRoute
             );
         }
+    }
+
+    record ApprovalRouteStepResponse(
+        String stepKey,
+        String stepName,
+        String actorName,
+        String roleName,
+        String status,
+        String completedAt
+    ) {
     }
 
     record ApplicationFieldValueResponse(

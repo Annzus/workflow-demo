@@ -80,8 +80,18 @@ export type ApplicationFieldValue = {
   displayOrder: number
 }
 
+export type ApprovalRouteStep = {
+  stepKey: string
+  stepName: string
+  actorName: string
+  roleName: string
+  status: string
+  completedAt: string | null
+}
+
 export type ApplicationDetail = ApplicationSummary & {
   values: ApplicationFieldValue[]
+  approvalRoute: ApprovalRouteStep[]
 }
 
 export type ApplicationHistory = {

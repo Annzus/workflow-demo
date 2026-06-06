@@ -2,6 +2,7 @@ package com.workflowdemo.backend;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.workflowdemo.backend.approval.ApprovalTaskRepository;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,6 +31,9 @@ class BackendApplicationTests {
 
 	@Autowired
 	private ObjectMapper objectMapper;
+
+	@Autowired
+	private ApprovalTaskRepository approvalTaskRepository;
 
 	@Test
 	void contextLoads() {
@@ -119,7 +123,13 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.title").value("詳細表示確認"))
 			.andExpect(jsonPath("$.values[0].fieldKey").value("destination"))
 			.andExpect(jsonPath("$.values[0].label").value("出張先"))
-			.andExpect(jsonPath("$.values[0].value").value("東京本社"));
+			.andExpect(jsonPath("$.values[0].value").value("東京本社"))
+			.andExpect(jsonPath("$.approvalRoute[0].stepName").value("申請者"))
+			.andExpect(jsonPath("$.approvalRoute[0].status").value("CURRENT"))
+			.andExpect(jsonPath("$.approvalRoute[1].stepName").value("部長承認"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("WAITING"))
+			.andExpect(jsonPath("$.approvalRoute[2].stepName").value("完了"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("WAITING"));
 	}
 
 	@Test
@@ -197,7 +207,11 @@ class BackendApplicationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("SUBMITTED"))
 			.andExpect(jsonPath("$.submittedAt").isNotEmpty())
-			.andExpect(jsonPath("$.values[0].value").value("東京本社"));
+			.andExpect(jsonPath("$.values[0].value").value("東京本社"))
+			.andExpect(jsonPath("$.approvalRoute[0].status").value("COMPLETED"))
+			.andExpect(jsonPath("$.approvalRoute[1].actorName").value("岩瀬 大樹"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("CURRENT"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("WAITING"));
 	}
 
 	@Test
@@ -233,6 +247,21 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void applicationDetailDoesNotShowCurrentApprovalWhenTaskIsMissing() throws Exception {
+		String id = submitTravelDraft("承認タスク欠落確認");
+		approvalTaskRepository.deleteAll(approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
+			java.util.UUID.fromString(id)
+		));
+
+		mockMvc.perform(get("/api/applications/{id}", id)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("SUBMITTED"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("WAITING"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("WAITING"));
+	}
+
+	@Test
 	void approvePendingTaskChangesApplicationToApproved() throws Exception {
 		String applicationId = submitTravelDraft("承認確認");
 		String taskId = pendingTaskIdForApplication(applicationId);
@@ -254,7 +283,10 @@ class BackendApplicationTests {
 		mockMvc.perform(get("/api/applications/{id}", applicationId)
 				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
 			.andExpect(status().isOk())
-			.andExpect(jsonPath("$.status").value("APPROVED"));
+			.andExpect(jsonPath("$.status").value("APPROVED"))
+			.andExpect(jsonPath("$.approvalRoute[0].status").value("COMPLETED"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("COMPLETED"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("COMPLETED"));
 	}
 
 	@Test
@@ -275,6 +307,13 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.applicationStatus").value("REJECTED"))
 			.andExpect(jsonPath("$.taskStatus").value("REJECTED"))
 			.andExpect(jsonPath("$.history.action").value("REJECT"));
+
+		mockMvc.perform(get("/api/applications/{id}", applicationId)
+				.with(httpBasic("demo1@growtea.co.jp", "demo1001")))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("REJECTED"))
+			.andExpect(jsonPath("$.approvalRoute[1].status").value("REJECTED"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("REJECTED"));
 	}
 
 	private String createTravelDraft(String title) throws Exception {
