@@ -33,6 +33,9 @@ public class WorkflowApplication {
     @Column(name = "submitted_at")
     private Instant submittedAt;
 
+    @Column(name = "workflow_version_id")
+    private UUID workflowVersionId;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
@@ -51,12 +54,13 @@ public class WorkflowApplication {
         this.createdAt = now;
     }
 
-    public void submit() {
+    public void submit(UUID workflowVersionId) {
         if (!"DRAFT".equals(status)) {
             throw new IllegalStateException("Only draft applications can be submitted");
         }
         this.status = "SUBMITTED";
         this.submittedAt = Instant.now();
+        this.workflowVersionId = workflowVersionId;
     }
 
     public void approve() {
@@ -99,6 +103,10 @@ public class WorkflowApplication {
 
     public Instant getSubmittedAt() {
         return submittedAt;
+    }
+
+    public UUID getWorkflowVersionId() {
+        return workflowVersionId;
     }
 
     public Instant getCreatedAt() {

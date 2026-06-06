@@ -27,6 +27,7 @@ class SecurityConfig {
                     "/api/master-data/**"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/form-definitions/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/workflow-definitions/**").permitAll()
                 .anyRequest().authenticated()
             )
             .httpBasic(Customizer.withDefaults());

@@ -45,6 +45,37 @@ export type FormDefinitionDetail = {
   fields: FormField[]
 }
 
+export type WorkflowDefinitionSummary = {
+  workflowCode: string
+  workflowName: string
+  activeVersion: number
+  nodeCount: number
+}
+
+export type WorkflowNode = {
+  nodeKey: string
+  nodeName: string
+  nodeType: string
+  approverType: string | null
+  positionCode: string | null
+  employeeCode: string | null
+  displayOrder: number
+  xPosition: number
+  yPosition: number
+}
+
+export type WorkflowEdge = {
+  sourceNodeKey: string
+  targetNodeKey: string
+  conditionExpression: string | null
+  displayOrder: number
+}
+
+export type WorkflowDefinitionDetail = WorkflowDefinitionSummary & {
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+}
+
 export type CreateDraftApplicationRequest = {
   formCode: string
   title: string
@@ -236,6 +267,14 @@ export function getFormDefinitions() {
 
 export function getFormDefinition(formCode: string) {
   return getJson<FormDefinitionDetail>(`/api/form-definitions/${formCode}`)
+}
+
+export function getWorkflowDefinitions() {
+  return getJson<WorkflowDefinitionSummary[]>('/api/workflow-definitions')
+}
+
+export function getWorkflowDefinition(workflowCode: string) {
+  return getJson<WorkflowDefinitionDetail>(`/api/workflow-definitions/${workflowCode}`)
 }
 
 export function getMe(authorization = currentAuthorization()) {

@@ -898,6 +898,13 @@ h2 {
   gap: 14px;
 }
 
+.workflow-definition-layout {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(240px, 0.56fr) minmax(0, 1.44fr);
+  gap: 14px;
+}
+
 .definition-list {
   display: grid;
   gap: 8px;
@@ -954,6 +961,14 @@ h2 {
   padding: 14px;
 }
 
+.workflow-definition-detail {
+  min-width: 0;
+  border: 1px solid #dfe5df;
+  border-radius: 8px;
+  background: #fbfcfb;
+  padding: 14px;
+}
+
 .definition-title {
   display: flex;
   align-items: start;
@@ -1002,6 +1017,70 @@ h2 {
 
 .field-row span {
   color: #5b6f60;
+}
+
+.workflow-node-list {
+  margin-top: 14px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.workflow-node-row {
+  min-height: 44px;
+  padding: 0 12px;
+  border-top: 1px solid #dfe5df;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 34px minmax(110px, 1fr) 112px 96px;
+  align-items: center;
+  gap: 10px;
+}
+
+.workflow-node-row:first-child {
+  border-top: 0;
+}
+
+.workflow-node-row span {
+  color: #334313;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workflow-node-row strong {
+  color: #17201b;
+  font-size: 13px;
+}
+
+.workflow-node-row small,
+.workflow-node-row em {
+  color: #5b6f60;
+  font-size: 12px;
+  font-style: normal;
+}
+
+.workflow-node-row.approval {
+  background: #f8fbf0;
+}
+
+.workflow-edge-list {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.workflow-edge-list span {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid #dfe5df;
+  border-radius: 999px;
+  background: #fff;
+  color: #5b6f60;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
 }
 
 .form-preview-grid {
@@ -1201,6 +1280,7 @@ textarea.preview-input {
   .draft-layout,
   .draft-form,
   .definition-layout,
+  .workflow-definition-layout,
   .form-preview-grid,
   .master-grid {
     grid-template-columns: 1fr;
@@ -1232,6 +1312,7 @@ textarea.preview-input {
   .history-row,
   .approval-task-row,
   .approval-route-step,
+  .workflow-node-row,
   .attachment-row,
   .attachment-upload {
     grid-template-columns: 1fr;

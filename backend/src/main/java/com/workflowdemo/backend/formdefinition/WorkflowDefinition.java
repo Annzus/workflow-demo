@@ -10,7 +10,7 @@ import jakarta.persistence.Table;
 
 @Entity
 @Table(name = "workflow_definitions")
-class WorkflowDefinition {
+public class WorkflowDefinition {
 
     @Id
     private UUID id;
@@ -27,23 +27,23 @@ class WorkflowDefinition {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    UUID getId() {
+    public UUID getId() {
         return id;
     }
 
-    String getWorkflowCode() {
+    public String getWorkflowCode() {
         return workflowCode;
     }
 
-    String getWorkflowName() {
+    public String getWorkflowName() {
         return workflowName;
     }
 
-    boolean isActive() {
+    public boolean isActive() {
         return active;
     }
 
-    Instant getCreatedAt() {
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }

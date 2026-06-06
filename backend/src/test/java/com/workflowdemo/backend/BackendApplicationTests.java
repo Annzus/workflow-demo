@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -42,6 +43,9 @@ class BackendApplicationTests {
 
 	@Autowired
 	private ApprovalTaskRepository approvalTaskRepository;
+
+	@Autowired
+	private JdbcTemplate jdbcTemplate;
 
 	@Test
 	void contextLoads() {
@@ -88,6 +92,23 @@ class BackendApplicationTests {
 	void applicationsRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/api/applications"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void workflowDefinitionsReturnPublishedNodesAndEdges() throws Exception {
+		mockMvc.perform(get("/api/workflow-definitions"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].workflowCode").value("WF-DEPT-APPROVAL"))
+			.andExpect(jsonPath("$[0].activeVersion").value(1))
+			.andExpect(jsonPath("$[0].nodeCount").value(3));
+
+		mockMvc.perform(get("/api/workflow-definitions/{workflowCode}", "WF-DEPT-APPROVAL"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.workflowName").value("部門承認ルート"))
+			.andExpect(jsonPath("$.nodes[1].nodeName").value("部長承認"))
+			.andExpect(jsonPath("$.nodes[1].employeeCode").value("1005"))
+			.andExpect(jsonPath("$.edges[0].sourceNodeKey").value("applicant"))
+			.andExpect(jsonPath("$.edges[0].targetNodeKey").value("manager_approval"));
 	}
 
 	@Test
@@ -319,6 +340,39 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void submitApplicationCreatesTaskFromConfiguredWorkflowRoute() throws Exception {
+		String id = createTimesheetDraft("勤務表ルート確認");
+
+		mockMvc.perform(post("/api/applications/{id}/submit", id)
+				.with(applicantAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("SUBMITTED"))
+			.andExpect(jsonPath("$.approvalRoute[1].stepName").value("総務確認"))
+			.andExpect(jsonPath("$.approvalRoute[1].actorName").value("岩瀬 大樹"));
+
+		mockMvc.perform(get("/api/approval-tasks/pending")
+				.with(approverAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].applicationId").value(id))
+			.andExpect(jsonPath("$[0].stepName").value("総務確認"));
+	}
+
+	@Test
+	void submittedApplicationKeepsWorkflowVersionSnapshotForDetail() throws Exception {
+		String id = submitTravelDraft("ワークフローバージョン固定確認");
+		insertAlternateDepartmentWorkflowVersion();
+
+		try {
+			mockMvc.perform(get("/api/applications/{id}", id)
+					.with(applicantAuth()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.approvalRoute[1].stepName").value("部長承認"));
+		} finally {
+			deleteAlternateDepartmentWorkflowVersion();
+		}
+	}
+
+	@Test
 	void applicationDetailDoesNotShowCurrentApprovalWhenTaskIsMissing() throws Exception {
 		String id = submitTravelDraft("承認タスク欠落確認");
 		approvalTaskRepository.deleteAll(approvalTaskRepository.findByApplicationIdOrderByCreatedAtAsc(
@@ -429,6 +483,29 @@ class BackendApplicationTests {
 		return response.get("id").asText();
 	}
 
+	private String createTimesheetDraft(String title) throws Exception {
+		MvcResult result = mockMvc.perform(post("/api/applications/drafts")
+				.with(applicantAuth())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "formCode": "TIMESHEET",
+					  "title": "%s",
+					  "values": {
+					    "target_month": "2026-06",
+					    "overtime_hours": "12",
+					    "comment": "月次勤務表の確認"
+					  }
+					}
+					""".formatted(title)))
+			.andExpect(status().isCreated())
+			.andExpect(jsonPath("$.id").isNotEmpty())
+			.andReturn();
+
+		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+		return response.get("id").asText();
+	}
+
 	private String submitTravelDraft(String title) throws Exception {
 		String id = createTravelDraft(title);
 		mockMvc.perform(post("/api/applications/{id}/submit", id)
@@ -436,6 +513,58 @@ class BackendApplicationTests {
 			.andExpect(status().isOk())
 			.andExpect(jsonPath("$.status").value("SUBMITTED"));
 		return id;
+	}
+
+	private void insertAlternateDepartmentWorkflowVersion() {
+		jdbcTemplate.update("""
+			insert into workflow_versions (
+			    id,
+			    workflow_definition_id,
+			    version_number,
+			    published
+			) values (
+			    '93000000-0000-0000-0000-000000000099',
+			    '90000000-0000-0000-0000-000000000001',
+			    99,
+			    true
+			)
+			""");
+		jdbcTemplate.update("""
+			insert into workflow_nodes (
+			    id,
+			    workflow_version_id,
+			    node_key,
+			    node_name,
+			    node_type,
+			    approver_type,
+			    position_code,
+			    employee_code,
+			    display_order,
+			    x_position,
+			    y_position
+			) values
+			    ('94000000-0000-0000-0000-000000000091', '93000000-0000-0000-0000-000000000099', 'applicant', '申請者', 'APPLICANT', null, null, null, 10, 80, 90),
+			    ('94000000-0000-0000-0000-000000000092', '93000000-0000-0000-0000-000000000099', 'new_manager_approval', '新版部長承認', 'APPROVAL', 'FIXED_EMPLOYEE', null, '1005', 20, 280, 90),
+			    ('94000000-0000-0000-0000-000000000093', '93000000-0000-0000-0000-000000000099', 'finish', '完了', 'END', null, null, null, 30, 480, 90)
+			""");
+		jdbcTemplate.update("""
+			insert into workflow_edges (
+			    id,
+			    workflow_version_id,
+			    source_node_key,
+			    target_node_key,
+			    condition_expression,
+			    display_order
+			) values
+			    ('95000000-0000-0000-0000-000000000091', '93000000-0000-0000-0000-000000000099', 'applicant', 'new_manager_approval', null, 10),
+			    ('95000000-0000-0000-0000-000000000092', '93000000-0000-0000-0000-000000000099', 'new_manager_approval', 'finish', 'approved', 20)
+			""");
+	}
+
+	private void deleteAlternateDepartmentWorkflowVersion() {
+		jdbcTemplate.update("delete from workflow_edges where workflow_version_id = '93000000-0000-0000-0000-000000000099'");
+		jdbcTemplate.update("delete from workflow_nodes where workflow_version_id = '93000000-0000-0000-0000-000000000099'");
+		jdbcTemplate.update("delete from workflow_versions where id = '93000000-0000-0000-0000-000000000099'");
 	}
 
 	private String pendingTaskIdForApplication(String applicationId) throws Exception {

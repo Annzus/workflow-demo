@@ -17,6 +17,9 @@ import com.workflowdemo.backend.formdefinition.ApplicationFormField;
 import com.workflowdemo.backend.formdefinition.ApplicationFormFieldRepository;
 import com.workflowdemo.backend.masterdata.Employee;
 import com.workflowdemo.backend.masterdata.EmployeeRepository;
+import com.workflowdemo.backend.workflow.WorkflowNode;
+import com.workflowdemo.backend.workflow.WorkflowRouteService;
+import com.workflowdemo.backend.workflow.WorkflowRouteService.WorkflowRoute;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -45,6 +48,7 @@ class ApplicationController {
     private final ApprovalTaskRepository approvalTaskRepository;
     private final ApprovalHistoryRepository approvalHistoryRepository;
     private final DemoUserContext demoUserContext;
+    private final WorkflowRouteService workflowRouteService;
 
     ApplicationController(
         ApplicationFormDefinitionRepository formDefinitionRepository,
@@ -54,7 +58,8 @@ class ApplicationController {
         ApplicationFieldValueRepository fieldValueRepository,
         ApprovalTaskRepository approvalTaskRepository,
         ApprovalHistoryRepository approvalHistoryRepository,
-        DemoUserContext demoUserContext
+        DemoUserContext demoUserContext,
+        WorkflowRouteService workflowRouteService
     ) {
         this.formDefinitionRepository = formDefinitionRepository;
         this.formFieldRepository = formFieldRepository;
@@ -64,6 +69,7 @@ class ApplicationController {
         this.approvalTaskRepository = approvalTaskRepository;
         this.approvalHistoryRepository = approvalHistoryRepository;
         this.demoUserContext = demoUserContext;
+        this.workflowRouteService = workflowRouteService;
     }
 
     @GetMapping
@@ -102,6 +108,10 @@ class ApplicationController {
         Employee applicant = applicantFor(application);
         ApplicationFormDefinition formDefinition = formDefinitionRepository.findById(application.getFormDefinitionId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
+        WorkflowRoute workflowRoute = workflowRouteService.routeForApplication(
+            formDefinition,
+            application.getWorkflowVersionId()
+        );
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
 
@@ -110,7 +120,7 @@ class ApplicationController {
             formDefinition,
             applicant,
             fieldValues,
-            buildApprovalRoute(application, applicant, demoUserContext.demoApprover(), approvalTasks)
+            buildApprovalRoute(application, applicant, workflowRoute, approvalTasks)
         );
     }
 
@@ -153,20 +163,22 @@ class ApplicationController {
     @Transactional
     ApplicationDetailResponse submitApplication(@PathVariable UUID id) {
         Employee applicant = demoUserContext.currentEmployee();
-        Employee approver = demoUserContext.demoApprover();
         WorkflowApplication application = applicationRepository.findById(id)
             .filter(foundApplication -> foundApplication.getApplicantEmployeeId().equals(applicant.getId()))
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Application not found"));
         ApplicationFormDefinition formDefinition = formDefinitionRepository.findById(application.getFormDefinitionId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Form definition not found"));
+        WorkflowRoute workflowRoute = workflowRouteService.routeForForm(formDefinition);
 
         try {
-            application.submit();
+            application.submit(workflowRoute.versionId());
         } catch (IllegalStateException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, exception.getMessage(), exception);
         }
 
-        approvalTaskRepository.save(new ApprovalTask(application.getId(), approver, "部長承認"));
+        approvalTaskRepository.save(
+            new ApprovalTask(application.getId(), workflowRoute.approver(), workflowRoute.approvalNode().getNodeName())
+        );
         approvalHistoryRepository.save(new ApprovalHistory(application.getId(), applicant, "SUBMIT", "申請を提出"));
         List<ApplicationFieldValue> fieldValues =
             fieldValueRepository.findByApplicationIdOrderByDisplayOrderAsc(application.getId());
@@ -179,7 +191,7 @@ class ApplicationController {
             formDefinition,
             applicant,
             fieldValues,
-            buildApprovalRoute(application, applicant, approver, approvalTasks)
+            buildApprovalRoute(application, applicant, workflowRoute, approvalTasks)
         );
     }
 
@@ -238,40 +250,51 @@ class ApplicationController {
     private static List<ApprovalRouteStepResponse> buildApprovalRoute(
         WorkflowApplication application,
         Employee applicant,
-        Employee fallbackApprover,
+        WorkflowRoute workflowRoute,
         List<ApprovalTask> approvalTasks
     ) {
         ApprovalTask approvalTask = approvalTasks.isEmpty() ? null : approvalTasks.getFirst();
-        String approverName = approvalTask == null ? fallbackApprover.getName() : approvalTask.getApproverName();
-        String approvalStepName = approvalTask == null ? "部長承認" : approvalTask.getStepName();
+        return workflowRoute.nodes().stream()
+            .map(node -> approvalRouteStep(application, applicant, workflowRoute, approvalTask, node))
+            .toList();
+    }
 
-        return List.of(
-            new ApprovalRouteStepResponse(
-                "applicant",
-                "申請者",
+    private static ApprovalRouteStepResponse approvalRouteStep(
+        WorkflowApplication application,
+        Employee applicant,
+        WorkflowRoute workflowRoute,
+        ApprovalTask approvalTask,
+        WorkflowNode node
+    ) {
+        if ("APPLICANT".equals(node.getNodeType())) {
+            return new ApprovalRouteStepResponse(
+                node.getNodeKey(),
+                node.getNodeName(),
                 applicant.getName(),
                 applicant.getPositionName(),
                 applicantStepStatus(application.getStatus()),
                 application.getSubmittedAt() == null ? null : application.getSubmittedAt().toString()
-            ),
-            new ApprovalRouteStepResponse(
-                "manager_approval",
-                approvalStepName,
-                approverName,
+            );
+        }
+        if ("APPROVAL".equals(node.getNodeType())) {
+            return new ApprovalRouteStepResponse(
+                node.getNodeKey(),
+                approvalTask == null ? node.getNodeName() : approvalTask.getStepName(),
+                approvalTask == null ? workflowRoute.approver().getName() : approvalTask.getApproverName(),
                 "承認者",
                 approvalStepStatus(application.getStatus(), approvalTask),
                 approvalTask == null || approvalTask.getCompletedAt() == null
                     ? null
                     : approvalTask.getCompletedAt().toString()
-            ),
-            new ApprovalRouteStepResponse(
-                "finish",
-                "完了",
-                "",
-                "最終状態",
-                finalStepStatus(application.getStatus()),
-                finalCompletedAt(application, approvalTask)
-            )
+            );
+        }
+        return new ApprovalRouteStepResponse(
+            node.getNodeKey(),
+            node.getNodeName(),
+            "",
+            "最終状態",
+            finalStepStatus(application.getStatus()),
+            finalCompletedAt(application, approvalTask)
         );
     }
 

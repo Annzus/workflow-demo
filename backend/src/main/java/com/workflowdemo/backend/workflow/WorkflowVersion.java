@@ -1,4 +1,4 @@
-package com.workflowdemo.backend.formdefinition;
+package com.workflowdemo.backend.workflow;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -9,23 +9,20 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "application_form_definitions")
-public class ApplicationFormDefinition {
+@Table(name = "workflow_versions")
+public class WorkflowVersion {
 
     @Id
     private UUID id;
 
-    @Column(name = "form_code", nullable = false)
-    private String formCode;
-
-    @Column(name = "form_name", nullable = false)
-    private String formName;
-
     @Column(name = "workflow_definition_id", nullable = false)
     private UUID workflowDefinitionId;
 
+    @Column(name = "version_number", nullable = false)
+    private int versionNumber;
+
     @Column(nullable = false)
-    private boolean active;
+    private boolean published;
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
@@ -34,23 +31,19 @@ public class ApplicationFormDefinition {
         return id;
     }
 
-    public String getFormCode() {
-        return formCode;
-    }
-
-    public String getFormName() {
-        return formName;
-    }
-
     public UUID getWorkflowDefinitionId() {
         return workflowDefinitionId;
     }
 
-    boolean isActive() {
-        return active;
+    public int getVersionNumber() {
+        return versionNumber;
     }
 
-    Instant getCreatedAt() {
+    public boolean isPublished() {
+        return published;
+    }
+
+    public Instant getCreatedAt() {
         return createdAt;
     }
 }

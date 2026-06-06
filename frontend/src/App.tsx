@@ -41,6 +41,8 @@ import {
   getPendingApprovalTasks,
   getPositions,
   getSavedAuthorization,
+  getWorkflowDefinition,
+  getWorkflowDefinitions,
   rejectApprovalTask,
   saveAuthorization,
   submitApplication,
@@ -159,6 +161,7 @@ function App() {
   const [loginUsername, setLoginUsername] = useState<string>(DEMO_USERNAME)
   const [loginPassword, setLoginPassword] = useState<string>(DEMO_PASSWORD)
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
+  const [selectedWorkflowCode, setSelectedWorkflowCode] = useState<string>()
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>()
@@ -188,6 +191,10 @@ function App() {
     queryKey: ['formDefinitions'],
     queryFn: getFormDefinitions,
   })
+  const workflowDefinitionsQuery = useQuery({
+    queryKey: ['workflowDefinitions'],
+    queryFn: getWorkflowDefinitions,
+  })
   const applicationsQuery = useQuery({
     queryKey: ['applications'],
     queryFn: getApplications,
@@ -203,14 +210,22 @@ function App() {
   const organizations = organizationsQuery.data ?? []
   const positions = positionsQuery.data ?? []
   const formDefinitions = formDefinitionsQuery.data ?? []
+  const workflowDefinitions = workflowDefinitionsQuery.data ?? []
   const workflowApplications = applicationsQuery.data ?? []
   const approvalTasks = approvalTasksQuery.data ?? []
   const activeFormCode = selectedFormCode ?? formDefinitions[0]?.formCode
+  const activeFormSummary = formDefinitions.find((formDefinition) => formDefinition.formCode === activeFormCode)
+  const activeWorkflowCode = selectedWorkflowCode ?? activeFormSummary?.workflowCode ?? workflowDefinitions[0]?.workflowCode
   const activeApplicationId = selectedApplicationId ?? workflowApplications[0]?.id
   const selectedFormQuery = useQuery({
     queryKey: ['formDefinition', activeFormCode],
     queryFn: () => getFormDefinition(activeFormCode ?? ''),
     enabled: Boolean(activeFormCode),
+  })
+  const selectedWorkflowQuery = useQuery({
+    queryKey: ['workflowDefinition', activeWorkflowCode],
+    queryFn: () => getWorkflowDefinition(activeWorkflowCode ?? ''),
+    enabled: Boolean(activeWorkflowCode),
   })
   const selectedApplicationQuery = useQuery({
     queryKey: ['application', activeApplicationId],
@@ -257,6 +272,11 @@ function App() {
     : formDefinitionsQuery.isLoading
       ? '読込中'
       : `${formDefinitions.length}件`
+  const workflowDefinitionCountLabel = workflowDefinitionsQuery.isError
+    ? '取得エラー'
+    : workflowDefinitionsQuery.isLoading
+      ? '読込中'
+      : `${workflowDefinitions.length}件`
   const applicationCountLabel = applicationsQuery.isError
     ? '取得エラー'
     : applicationsQuery.isLoading
@@ -268,6 +288,7 @@ function App() {
       ? '読込中'
       : `${approvalTasks.length}件`
   const selectedForm = selectedFormQuery.data
+  const selectedWorkflow = selectedWorkflowQuery.data
   const selectedApplication = selectedApplicationQuery.data
   const applicationHistory = applicationHistoryQuery.data ?? []
   const applicationAttachments = applicationAttachmentsQuery.data ?? []
@@ -344,6 +365,10 @@ function App() {
     setApplicationTitle('')
     setDraftValues({})
     createDraftMutation.reset()
+  }
+
+  function selectWorkflow(workflowCode: string) {
+    setSelectedWorkflowCode(workflowCode)
   }
 
   function selectApplication(applicationId: string) {
@@ -925,6 +950,85 @@ function App() {
                 </button>
               </div>
             </form>
+          </article>
+        </section>
+
+        <section className="workflow-definition-grid" aria-label="ワークフロー定義">
+          <article className="panel workflow-definition-panel">
+            <div className="panel-header">
+              <div>
+                <p className="eyebrow">ワークフロー定義</p>
+                <h2>承認ルート設定</h2>
+              </div>
+              <span className="count-label">{workflowDefinitionCountLabel}</span>
+            </div>
+
+            <div className="workflow-definition-layout">
+              <div className="definition-list" aria-label="ワークフロー定義一覧">
+                {workflowDefinitionsQuery.isError ? (
+                  <div className="compact-row compact-row-muted">ワークフロー定義を取得できません</div>
+                ) : (
+                  workflowDefinitions.map((workflowDefinition) => (
+                    <button
+                      className={
+                        activeWorkflowCode === workflowDefinition.workflowCode
+                          ? 'definition-option active'
+                          : 'definition-option'
+                      }
+                      key={workflowDefinition.workflowCode}
+                      onClick={() => selectWorkflow(workflowDefinition.workflowCode)}
+                      type="button"
+                    >
+                      <strong>{workflowDefinition.workflowName}</strong>
+                      <span>{workflowDefinition.workflowCode}</span>
+                      <small>Version {workflowDefinition.activeVersion}</small>
+                      <em>{workflowDefinition.nodeCount}ノード</em>
+                    </button>
+                  ))
+                )}
+              </div>
+
+              <div className="workflow-definition-detail">
+                {selectedWorkflowQuery.isError ? (
+                  <div className="compact-row compact-row-muted">選択中のワークフローを取得できません</div>
+                ) : selectedWorkflowQuery.isLoading ? (
+                  <div className="compact-row">ワークフローを読込中</div>
+                ) : selectedWorkflow ? (
+                  <>
+                    <div className="definition-title">
+                      <div>
+                        <span>{selectedWorkflow.workflowCode}</span>
+                        <h3>{selectedWorkflow.workflowName}</h3>
+                      </div>
+                      <small>Version {selectedWorkflow.activeVersion}</small>
+                    </div>
+
+                    <div className="workflow-node-list">
+                      {selectedWorkflow.nodes.map((node) => (
+                        <div className={`workflow-node-row ${node.nodeType.toLowerCase()}`} key={node.nodeKey}>
+                          <span>{node.displayOrder}</span>
+                          <strong>{node.nodeName}</strong>
+                          <small>{node.nodeType}</small>
+                          <em>
+                            {node.employeeCode ? `社員 ${node.employeeCode}` : node.positionCode ?? '-'}
+                          </em>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="workflow-edge-list">
+                      {selectedWorkflow.edges.map((edge) => (
+                        <span key={`${edge.sourceNodeKey}-${edge.targetNodeKey}`}>
+                          {edge.sourceNodeKey} {'->'} {edge.targetNodeKey}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div className="compact-row">ワークフローを選択してください</div>
+                )}
+              </div>
+            </div>
           </article>
         </section>
 
