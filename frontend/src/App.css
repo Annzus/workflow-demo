@@ -308,6 +308,60 @@ h2 {
   gap: 14px;
 }
 
+.section-guide-grid {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.guide-card {
+  min-height: 126px;
+  padding: 16px;
+  border: 1px solid #cfd8d0;
+  border-left: 4px solid #287b70;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 18px 42px rgba(23, 32, 27, 0.08);
+  color: #17201b;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.guide-card:nth-child(2) {
+  border-left-color: #5f6f9b;
+}
+
+.guide-card:nth-child(3) {
+  border-left-color: #9c6a38;
+}
+
+.guide-card:hover {
+  border-color: #aebbb0;
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.guide-card span {
+  color: #5b6f60;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.guide-card strong {
+  color: #17201b;
+  font-size: 15px;
+}
+
+.guide-card small {
+  color: #5b6f60;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .summary-grid article,
 .panel {
   border: 1px solid #cfd8d0;
@@ -357,6 +411,10 @@ h2 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
+}
+
+.settings-grid {
+  margin-top: 14px;
 }
 
 .panel {
@@ -1138,6 +1196,7 @@ h2 {
 }
 
 .workflow-canvas {
+  position: relative;
   height: 260px;
   border: 1px solid #dfe5df;
   border-radius: 7px;
@@ -1160,13 +1219,52 @@ h2 {
 }
 
 .workflow-editor-row {
-  grid-template-columns:
-    minmax(96px, 0.9fr) minmax(120px, 1fr) 104px minmax(128px, 1fr) 82px 82px
-    42px;
+  grid-template-columns: 34px minmax(90px, 0.78fr) minmax(150px, 1.3fr) minmax(110px, 0.9fr) minmax(130px, 1fr) minmax(90px, 0.72fr) minmax(90px, 0.72fr) 42px;
 }
 
 .workflow-editor-row.edge {
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr);
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+}
+
+.workflow-editor-card,
+.workflow-edge-card {
+  padding: 10px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  background: #fff;
+}
+
+.node-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: #17201b;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.workflow-editor-field {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.workflow-editor-field span {
+  color: #5b6f60;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.workflow-editor-field.wide-field {
+  min-width: 140px;
+}
+
+.workflow-editor-field.code-field input {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
 }
 
 .form-field-editor-row {
@@ -1187,6 +1285,22 @@ h2 {
   background: #fff;
   color: #17201b;
   padding: 0 9px;
+}
+
+.workflow-canvas .react-flow__node-default {
+  min-width: 124px;
+  border: 2px solid #287b70;
+  border-radius: 7px;
+  background: #f8fbf0;
+  color: #17201b;
+  font-size: 12px;
+  font-weight: 800;
+  box-shadow: 0 12px 26px rgba(23, 32, 27, 0.18);
+}
+
+.workflow-canvas .react-flow__edge-path {
+  stroke: #287b70;
+  stroke-width: 2;
 }
 
 .editor-check {
@@ -1402,6 +1516,7 @@ textarea.preview-input {
   }
 
   .summary-grid,
+  .section-guide-grid,
   .content-grid,
   .draft-layout,
   .draft-form,

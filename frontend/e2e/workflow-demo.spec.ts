@@ -31,6 +31,10 @@ async function login(page: Page, account: typeof applicantAccount) {
   await expect(page.getByLabel('現在のユーザー')).toContainText(account.employeeName)
 }
 
+async function openSection(page: Page, sectionName: string) {
+  await page.getByRole('navigation', { name: 'メインナビゲーション' }).getByRole('button', { name: sectionName }).click()
+}
+
 test('applicant submits a request and approver approves it with history visible', async ({ page, request }) => {
   await assertBackendAvailable(request)
 
@@ -38,6 +42,7 @@ test('applicant submits a request and approver approves it with history visible'
 
   await login(page, applicantAccount)
 
+  await openSection(page, '申請者フロー')
   const newApplication = page.getByLabel('新規申請')
   await newApplication.getByLabel('申請書').selectOption('TRAVEL')
   await newApplication.getByLabel('件名').fill(title)
@@ -56,6 +61,7 @@ test('applicant submits a request and approver approves it with history visible'
   await page.getByLabel('ログアウト').click()
   await login(page, approverAccount)
 
+  await openSection(page, '承認者フロー')
   const approvalTasks = page.getByLabel('承認タスク')
   await expect(approvalTasks.getByText(title)).toBeVisible()
   await approvalTasks.getByText(title).click()

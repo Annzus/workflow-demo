@@ -64,15 +64,48 @@ import {
   uploadApplicationAttachment,
 } from './api'
 
-const navItems = [
-  { label: 'ダッシュボード', icon: LayoutDashboard, active: true },
-  { label: '各種申請', icon: ClipboardList },
-  { label: '承認タスク', icon: BadgeCheck },
-  { label: 'ワークフロー定義', icon: GitBranch },
-  { label: '社員', icon: Users },
-  { label: '申請書定義', icon: FileSpreadsheet },
-  { label: '設定', icon: Settings },
+type SectionId = 'dashboard' | 'applications' | 'approvals' | 'workflows' | 'employees' | 'forms' | 'settings'
+
+const navItems: Array<{ id: SectionId; label: string; icon: typeof LayoutDashboard }> = [
+  { id: 'dashboard', label: 'ダッシュボード', icon: LayoutDashboard },
+  { id: 'applications', label: '申請者フロー', icon: ClipboardList },
+  { id: 'approvals', label: '承認者フロー', icon: BadgeCheck },
+  { id: 'workflows', label: '承認ルート設定', icon: GitBranch },
+  { id: 'forms', label: '申請書定義', icon: FileSpreadsheet },
+  { id: 'employees', label: '社員マスタ', icon: Users },
+  { id: 'settings', label: 'デモ情報', icon: Settings },
 ]
+
+const sectionMeta: Record<SectionId, { eyebrow: string; title: string }> = {
+  dashboard: {
+    eyebrow: 'ワークフロー運用',
+    title: '運用ダッシュボード',
+  },
+  applications: {
+    eyebrow: '申請者フロー',
+    title: '申請作成・提出',
+  },
+  approvals: {
+    eyebrow: '承認者フロー',
+    title: '承認タスク・履歴',
+  },
+  workflows: {
+    eyebrow: '管理者設定',
+    title: '承認ルート設定',
+  },
+  employees: {
+    eyebrow: '管理者設定',
+    title: '社員・組織・役職マスタ',
+  },
+  forms: {
+    eyebrow: '管理者設定',
+    title: '申請書定義',
+  },
+  settings: {
+    eyebrow: 'ポートフォリオ',
+    title: 'デモ環境と確認ポイント',
+  },
+}
 
 function previewFieldType(field: FormField) {
   if (field.dataType === 'TEXTAREA') {
@@ -130,12 +163,60 @@ function createDefaultWorkflowNode(displayOrder: number): WorkflowNode {
   }
 }
 
+function fieldDataTypeLabel(dataType: string) {
+  if (dataType === 'TEXT') {
+    return '一行テキスト'
+  }
+  if (dataType === 'TEXTAREA') {
+    return '複数行テキスト'
+  }
+  if (dataType === 'NUMBER') {
+    return '数値'
+  }
+  if (dataType === 'DATE') {
+    return '日付'
+  }
+  if (dataType === 'MONTH') {
+    return '年月'
+  }
+  return dataType
+}
+
+function workflowNodeTypeLabel(nodeType: string) {
+  if (nodeType === 'APPLICANT') {
+    return '申請者'
+  }
+  if (nodeType === 'APPROVAL') {
+    return '承認'
+  }
+  if (nodeType === 'BRANCH') {
+    return '条件分岐'
+  }
+  if (nodeType === 'END') {
+    return '完了'
+  }
+  return nodeType
+}
+
+function approverTypeLabel(approverType: string | null) {
+  if (!approverType) {
+    return '承認者なし'
+  }
+  if (approverType === 'FIXED_EMPLOYEE') {
+    return '社員を指定'
+  }
+  if (approverType === 'POSITION') {
+    return '役職を指定'
+  }
+  return approverType
+}
+
 function workflowNodesToFlowNodes(nodes: WorkflowNode[]): FlowNode[] {
   return nodes.map((node) => ({
     id: node.nodeKey,
     position: { x: node.xPosition, y: node.yPosition },
     data: {
-      label: `${node.nodeName} / ${node.nodeType}`,
+      label: `${node.nodeName} / ${workflowNodeTypeLabel(node.nodeType)}`,
     },
     type: 'default',
   }))
@@ -218,6 +299,7 @@ function routeStatusLabel(status: string) {
 
 function App() {
   const queryClient = useQueryClient()
+  const [activeSection, setActiveSection] = useState<SectionId>('dashboard')
   const [authorization, setAuthorization] = useState<string | null>(() => getSavedAuthorization())
   const [loginUsername, setLoginUsername] = useState<string>(DEMO_USERNAME)
   const [loginPassword, setLoginPassword] = useState<string>(DEMO_PASSWORD)
@@ -380,6 +462,9 @@ function App() {
   const selectedApprovalRoute = selectedApplication?.approvalRoute ?? []
   const workflowFlowNodes = workflowNodesToFlowNodes(workflowEditor.nodes)
   const workflowFlowEdges = workflowEdgesToFlowEdges(workflowEditor.edges)
+  const activeSectionMeta = sectionMeta[activeSection]
+  const showApplicationWorkspace =
+    activeSection === 'dashboard' || activeSection === 'applications' || activeSection === 'approvals'
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const nextAuthorization = buildBasicAuthorization(credentials.username, credentials.password)
@@ -816,9 +901,14 @@ function App() {
           </div>
         </div>
 
-        <nav className="nav-list" aria-label="Main navigation">
+        <nav className="nav-list" aria-label="メインナビゲーション">
           {navItems.map((item) => (
-            <button className={item.active ? 'nav-item active' : 'nav-item'} key={item.label}>
+            <button
+              className={activeSection === item.id ? 'nav-item active' : 'nav-item'}
+              key={item.id}
+              onClick={() => setActiveSection(item.id)}
+              type="button"
+            >
               <item.icon size={18} aria-hidden="true" />
               {item.label}
             </button>
@@ -829,8 +919,8 @@ function App() {
       <section className="workspace">
         <header className="topbar">
           <div>
-            <p className="eyebrow">ワークフロー運用</p>
-            <h1>ワークフロー運用ダッシュボード</h1>
+            <p className="eyebrow">{activeSectionMeta.eyebrow}</p>
+            <h1>{activeSectionMeta.title}</h1>
           </div>
           <div className="topbar-actions">
             <div className="user-chip" aria-label="現在のユーザー">
@@ -844,7 +934,7 @@ function App() {
               <Search size={17} aria-hidden="true" />
               <input aria-label="申請検索" placeholder="申請を検索" />
             </label>
-            <button className="icon-button" aria-label="Notifications">
+            <button className="icon-button" aria-label="通知">
               <Bell size={18} aria-hidden="true" />
             </button>
             <button className="icon-button" aria-label="ログアウト" onClick={logout} title="ログアウト">
@@ -853,7 +943,9 @@ function App() {
           </div>
         </header>
 
-        <section className="summary-grid" aria-label="Workflow summary">
+        {activeSection === 'dashboard' ? (
+        <>
+        <section className="summary-grid" aria-label="ワークフロー概要">
           <article>
             <span>確認待ち</span>
             <strong>{approvalTasksQuery.isLoading ? '-' : approvalTasks.length}</strong>
@@ -871,6 +963,27 @@ function App() {
           </article>
         </section>
 
+        <section className="section-guide-grid" aria-label="主要フロー">
+          <button className="guide-card" onClick={() => setActiveSection('applications')} type="button">
+            <span>申請者フロー</span>
+            <strong>下書き作成、添付、提出までを確認</strong>
+            <small>動的フォームと承認ルートの紐づきを見せる画面</small>
+          </button>
+          <button className="guide-card" onClick={() => setActiveSection('approvals')} type="button">
+            <span>承認者フロー</span>
+            <strong>確認待ちタスクから承認履歴までを確認</strong>
+            <small>承認・否認後の状態変化と履歴を追える画面</small>
+          </button>
+          <button className="guide-card" onClick={() => setActiveSection('workflows')} type="button">
+            <span>管理者設定</span>
+            <strong>申請書定義と承認ルートを設定</strong>
+            <small>React Flow で業務ルートを編集し公開できる画面</small>
+          </button>
+        </section>
+        </>
+        ) : null}
+
+        {showApplicationWorkspace ? (
         <section className="content-grid">
           <article className="panel applications-panel">
             <div className="panel-header">
@@ -1081,7 +1194,9 @@ function App() {
             )}
           </article>
         </section>
+        ) : null}
 
+        {activeSection === 'approvals' ? (
         <section className="approval-grid" aria-label="承認タスク">
           <article className="panel approval-panel">
             <div className="panel-header">
@@ -1144,7 +1259,9 @@ function App() {
             )}
           </article>
         </section>
+        ) : null}
 
+        {activeSection === 'applications' ? (
         <section className="draft-grid" aria-label="新規申請">
           <article className="panel draft-panel">
             <div className="panel-header">
@@ -1152,7 +1269,7 @@ function App() {
                 <p className="eyebrow">新規申請</p>
                 <h2>申請フォーム入力</h2>
               </div>
-              <span className="count-label">DRAFT</span>
+              <span className="count-label">下書き</span>
             </div>
 
             <form className="draft-layout" onSubmit={submitDraftApplication}>
@@ -1184,7 +1301,7 @@ function App() {
                 <div className="draft-status-box">
                   <strong>{selectedForm?.workflowName ?? 'ワークフロー未選択'}</strong>
                   <span>申請者：{currentUser?.name ?? '-'}</span>
-                  <span>保存後ステータス：DRAFT</span>
+                  <span>保存後ステータス：下書き</span>
                 </div>
               </div>
 
@@ -1231,7 +1348,9 @@ function App() {
             </form>
           </article>
         </section>
+        ) : null}
 
+        {activeSection === 'workflows' ? (
         <section className="workflow-definition-grid" aria-label="ワークフロー定義">
           <article className="panel workflow-definition-panel">
             <div className="panel-header">
@@ -1260,7 +1379,7 @@ function App() {
                     >
                       <strong>{workflowDefinition.workflowName}</strong>
                       <span>{workflowDefinition.workflowCode}</span>
-                      <small>Version {workflowDefinition.activeVersion}</small>
+                      <small>公開版 {workflowDefinition.activeVersion}</small>
                       <em>{workflowDefinition.nodeCount}ノード</em>
                     </button>
                   ))
@@ -1279,7 +1398,7 @@ function App() {
                         <span>{selectedWorkflow.workflowCode}</span>
                         <h3>{selectedWorkflow.workflowName}</h3>
                       </div>
-                      <small>Version {selectedWorkflow.activeVersion}</small>
+                      <small>公開版 {selectedWorkflow.activeVersion}</small>
                     </div>
 
                     <div className="workflow-node-list">
@@ -1287,9 +1406,13 @@ function App() {
                         <div className={`workflow-node-row ${node.nodeType.toLowerCase()}`} key={node.nodeKey}>
                           <span>{node.displayOrder}</span>
                           <strong>{node.nodeName}</strong>
-                          <small>{node.nodeType}</small>
+                          <small>{workflowNodeTypeLabel(node.nodeType)}</small>
                           <em>
-                            {node.employeeCode ? `社員 ${node.employeeCode}` : node.positionCode ?? '-'}
+                            {node.employeeCode
+                              ? `社員 ${node.employeeCode}`
+                              : node.positionCode
+                                ? `役職 ${node.positionCode}`
+                                : approverTypeLabel(node.approverType)}
                           </em>
                         </div>
                       ))}
@@ -1298,7 +1421,7 @@ function App() {
                     <div className="workflow-edge-list">
                       {selectedWorkflow.edges.map((edge) => (
                         <span key={`${edge.sourceNodeKey}-${edge.targetNodeKey}`}>
-                          {edge.sourceNodeKey} {'->'} {edge.targetNodeKey}
+                          {edge.sourceNodeKey} から {edge.targetNodeKey}
                         </span>
                       ))}
                     </div>
@@ -1322,23 +1445,23 @@ function App() {
                         </label>
                         <div className="editor-actions">
                           {saveWorkflowDraftMutation.isError ? (
-                            <span className="draft-message error">草稿を保存できません</span>
+                            <span className="draft-message error">下書きを保存できません</span>
                           ) : null}
                           {saveWorkflowDraftMutation.data ? (
-                            <span className="draft-message">Version {saveWorkflowDraftMutation.data.versionNumber} を保存しました</span>
+                            <span className="draft-message">下書き版 {saveWorkflowDraftMutation.data.versionNumber} を保存しました</span>
                           ) : null}
                           {publishWorkflowDraftMutation.isError ? (
                             <span className="draft-message error">公開できません</span>
                           ) : null}
                           {publishWorkflowDraftMutation.data ? (
-                            <span className="draft-message">Version {publishWorkflowDraftMutation.data.versionNumber} を公開しました</span>
+                            <span className="draft-message">公開版 {publishWorkflowDraftMutation.data.versionNumber} を公開しました</span>
                           ) : null}
                           <button
                             className="secondary-button"
                             disabled={saveWorkflowDraftMutation.isPending}
                             type="submit"
                           >
-                            {saveWorkflowDraftMutation.isPending ? '保存中' : '草稿保存'}
+                            {saveWorkflowDraftMutation.isPending ? '保存中' : '下書き保存'}
                           </button>
                           <button
                             className="primary-button"
@@ -1371,47 +1494,73 @@ function App() {
                       </div>
                       <div className="workflow-editor-table">
                         {workflowEditor.nodes.map((node, index) => (
-                          <div className="workflow-editor-row" key={`${node.nodeKey}-${index}`}>
-                            <input
-                              value={node.nodeKey}
-                              onChange={(event) => updateWorkflowNode(index, { nodeKey: event.target.value })}
-                            />
-                            <input
-                              value={node.nodeName}
-                              onChange={(event) => updateWorkflowNode(index, { nodeName: event.target.value })}
-                            />
-                            <select
-                              value={node.nodeType}
-                              onChange={(event) => updateWorkflowNode(index, { nodeType: event.target.value })}
+                          <div className="workflow-editor-row workflow-editor-card" key={`${node.nodeKey}-${index}`}>
+                            <div className="node-badge">{index + 1}</div>
+                            <label className="workflow-editor-field code-field">
+                              <span>ステップID</span>
+                              <input
+                                value={node.nodeKey}
+                                onChange={(event) => updateWorkflowNode(index, { nodeKey: event.target.value })}
+                              />
+                            </label>
+                            <label className="workflow-editor-field wide-field">
+                              <span>ステップ名</span>
+                              <input
+                                value={node.nodeName}
+                                onChange={(event) => updateWorkflowNode(index, { nodeName: event.target.value })}
+                              />
+                            </label>
+                            <label className="workflow-editor-field">
+                              <span>種類</span>
+                              <select
+                                value={node.nodeType}
+                                onChange={(event) => updateWorkflowNode(index, { nodeType: event.target.value })}
+                              >
+                                <option value="APPLICANT">申請者</option>
+                                <option value="APPROVAL">承認</option>
+                                <option value="BRANCH">条件分岐</option>
+                                <option value="END">完了</option>
+                              </select>
+                            </label>
+                            <label className="workflow-editor-field">
+                              <span>承認者</span>
+                              <select
+                                value={node.approverType ?? ''}
+                                onChange={(event) =>
+                                  updateWorkflowNode(index, { approverType: event.target.value || null })
+                                }
+                              >
+                                <option value="">承認者なし</option>
+                                <option value="FIXED_EMPLOYEE">社員を指定</option>
+                                <option value="POSITION">役職を指定</option>
+                              </select>
+                            </label>
+                            <label className="workflow-editor-field compact-field">
+                              <span>役職コード</span>
+                              <input
+                                placeholder="例：MGR"
+                                value={node.positionCode ?? ''}
+                                onChange={(event) =>
+                                  updateWorkflowNode(index, { positionCode: event.target.value || null })
+                                }
+                              />
+                            </label>
+                            <label className="workflow-editor-field compact-field">
+                              <span>社員コード</span>
+                              <input
+                                placeholder="例：1005"
+                                value={node.employeeCode ?? ''}
+                                onChange={(event) =>
+                                  updateWorkflowNode(index, { employeeCode: event.target.value || null })
+                                }
+                              />
+                            </label>
+                            <button
+                              className="icon-button"
+                              onClick={() => removeWorkflowNode(index)}
+                              title="ステップを削除"
+                              type="button"
                             >
-                              <option value="APPLICANT">APPLICANT</option>
-                              <option value="APPROVAL">APPROVAL</option>
-                              <option value="BRANCH">BRANCH</option>
-                              <option value="END">END</option>
-                            </select>
-                            <select
-                              value={node.approverType ?? ''}
-                              onChange={(event) =>
-                                updateWorkflowNode(index, { approverType: event.target.value || null })
-                              }
-                            >
-                              <option value="">-</option>
-                              <option value="FIXED_EMPLOYEE">FIXED_EMPLOYEE</option>
-                              <option value="POSITION">POSITION</option>
-                            </select>
-                            <input
-                              value={node.positionCode ?? ''}
-                              onChange={(event) =>
-                                updateWorkflowNode(index, { positionCode: event.target.value || null })
-                              }
-                            />
-                            <input
-                              value={node.employeeCode ?? ''}
-                              onChange={(event) =>
-                                updateWorkflowNode(index, { employeeCode: event.target.value || null })
-                              }
-                            />
-                            <button className="icon-button" onClick={() => removeWorkflowNode(index)} type="button">
                               <X size={14} />
                             </button>
                           </div>
@@ -1419,40 +1568,50 @@ function App() {
                       </div>
 
                       <div className="editor-section-title">
-                        <strong>連線</strong>
+                        <strong>ルート接続</strong>
                         <button className="icon-text-button" onClick={addWorkflowEdge} type="button">
                           追加
                         </button>
                       </div>
                       <div className="workflow-editor-table">
                         {workflowEditor.edges.map((edge, index) => (
-                          <div className="workflow-editor-row edge" key={`${edge.sourceNodeKey}-${edge.targetNodeKey}-${index}`}>
-                            <select
-                              value={edge.sourceNodeKey}
-                              onChange={(event) => updateWorkflowEdge(index, { sourceNodeKey: event.target.value })}
-                            >
-                              {workflowEditor.nodes.map((node) => (
-                                <option key={node.nodeKey} value={node.nodeKey}>
-                                  {node.nodeKey}
-                                </option>
-                              ))}
-                            </select>
-                            <select
-                              value={edge.targetNodeKey}
-                              onChange={(event) => updateWorkflowEdge(index, { targetNodeKey: event.target.value })}
-                            >
-                              {workflowEditor.nodes.map((node) => (
-                                <option key={node.nodeKey} value={node.nodeKey}>
-                                  {node.nodeKey}
-                                </option>
-                              ))}
-                            </select>
-                            <input
-                              value={edge.conditionExpression ?? ''}
-                              onChange={(event) =>
-                                updateWorkflowEdge(index, { conditionExpression: event.target.value || null })
-                              }
-                            />
+                          <div className="workflow-editor-row edge workflow-edge-card" key={`${edge.sourceNodeKey}-${edge.targetNodeKey}-${index}`}>
+                            <label className="workflow-editor-field">
+                              <span>開始ステップ</span>
+                              <select
+                                value={edge.sourceNodeKey}
+                                onChange={(event) => updateWorkflowEdge(index, { sourceNodeKey: event.target.value })}
+                              >
+                                {workflowEditor.nodes.map((node) => (
+                                  <option key={node.nodeKey} value={node.nodeKey}>
+                                    {node.nodeName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="workflow-editor-field">
+                              <span>次のステップ</span>
+                              <select
+                                value={edge.targetNodeKey}
+                                onChange={(event) => updateWorkflowEdge(index, { targetNodeKey: event.target.value })}
+                              >
+                                {workflowEditor.nodes.map((node) => (
+                                  <option key={node.nodeKey} value={node.nodeKey}>
+                                    {node.nodeName}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label className="workflow-editor-field">
+                              <span>条件</span>
+                              <input
+                                placeholder="通常は空欄"
+                                value={edge.conditionExpression ?? ''}
+                                onChange={(event) =>
+                                  updateWorkflowEdge(index, { conditionExpression: event.target.value || null })
+                                }
+                              />
+                            </label>
                           </div>
                         ))}
                       </div>
@@ -1465,7 +1624,9 @@ function App() {
             </div>
           </article>
         </section>
+        ) : null}
 
+        {activeSection === 'forms' ? (
         <section className="definition-grid" aria-label="申請書定義">
           <article className="panel definition-panel">
             <div className="panel-header">
@@ -1518,7 +1679,7 @@ function App() {
                       {(selectedForm?.fields ?? []).map((field) => (
                         <div className="field-row" key={field.fieldKey}>
                           <strong>{field.label}</strong>
-                          <span>{field.dataType}</span>
+                          <span>{fieldDataTypeLabel(field.dataType)}</span>
                           <span>{field.required ? '必須' : '任意'}</span>
                         </div>
                       ))}
@@ -1608,11 +1769,11 @@ function App() {
                               value={field.dataType}
                               onChange={(event) => updateFormField(index, { dataType: event.target.value })}
                             >
-                              <option value="TEXT">TEXT</option>
-                              <option value="TEXTAREA">TEXTAREA</option>
-                              <option value="NUMBER">NUMBER</option>
-                              <option value="DATE">DATE</option>
-                              <option value="MONTH">MONTH</option>
+                              <option value="TEXT">一行テキスト</option>
+                              <option value="TEXTAREA">複数行テキスト</option>
+                              <option value="NUMBER">数値</option>
+                              <option value="DATE">日付</option>
+                              <option value="MONTH">年月</option>
                             </select>
                             <label className="editor-check">
                               <input
@@ -1639,7 +1800,9 @@ function App() {
             </div>
           </article>
         </section>
+        ) : null}
 
+        {activeSection === 'employees' ? (
         <section className="master-grid" aria-label="マスタデータ">
           <article className="panel master-panel">
             <div className="panel-header">
@@ -1703,13 +1866,42 @@ function App() {
                   <div className="compact-row" key={position.positionCode}>
                     <strong>{position.name}</strong>
                     <span>{position.positionCode}</span>
-                    <span>rank {position.approvalRank}</span>
+                    <span>承認ランク {position.approvalRank}</span>
                   </div>
                 ))
               )}
             </div>
           </article>
         </section>
+        ) : null}
+
+        {activeSection === 'settings' ? (
+          <section className="settings-grid" aria-label="デモ情報">
+            <article className="panel">
+              <div className="panel-header">
+                <div>
+                  <p className="eyebrow">確認ポイント</p>
+                  <h2>ポートフォリオで見せる範囲</h2>
+                </div>
+                <Settings size={20} aria-hidden="true" />
+              </div>
+              <div className="compact-list">
+                <div className="compact-row">
+                  <strong>申請者</strong>
+                  <span>demo1@growtea.co.jp / demo1001</span>
+                </div>
+                <div className="compact-row">
+                  <strong>承認者</strong>
+                  <span>demo5@growtea.co.jp / demo1005</span>
+                </div>
+                <div className="compact-row">
+                  <strong>API ドキュメント</strong>
+                  <span>Swagger UI と OpenAPI JSON を localhost:8080 で確認できます</span>
+                </div>
+              </div>
+            </article>
+          </section>
+        ) : null}
       </section>
     </main>
   )
