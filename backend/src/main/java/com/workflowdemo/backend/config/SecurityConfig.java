@@ -24,7 +24,10 @@ class SecurityConfig {
                 .requestMatchers(
                     "/api/health",
                     "/actuator/health",
-                    "/api/master-data/**"
+                    "/api/master-data/**",
+                    "/v3/api-docs/**",
+                    "/swagger-ui.html",
+                    "/swagger-ui/**"
                 ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/form-definitions/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/workflow-definitions/**").permitAll()

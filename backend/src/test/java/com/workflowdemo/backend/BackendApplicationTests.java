@@ -19,6 +19,7 @@ import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -92,6 +93,20 @@ class BackendApplicationTests {
 	void applicationsRequireAuthentication() throws Exception {
 		mockMvc.perform(get("/api/applications"))
 			.andExpect(status().isUnauthorized());
+	}
+
+	@Test
+	void openApiDocsArePublicAndMarkSecuredOperations() throws Exception {
+		MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.info.title").value("Workflow Demo API"))
+			.andExpect(jsonPath("$.components.securitySchemes.basicAuth.scheme").value("basic"))
+			.andReturn();
+
+		JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
+		assertThat(response.at("/paths/~1api~1applications~1drafts/post/security/0/basicAuth").isArray()).isTrue();
+		assertThat(response.at("/paths/~1api~1master-data~1employees/get/security").isMissingNode()).isTrue();
+		assertThat(response.at("/paths/~1api~1workflow-definitions/get/security").isMissingNode()).isTrue();
 	}
 
 	@Test
@@ -591,6 +606,37 @@ class BackendApplicationTests {
 			.andExpect(jsonPath("$.approvalRoute[0].status").value("COMPLETED"))
 			.andExpect(jsonPath("$.approvalRoute[1].status").value("COMPLETED"))
 			.andExpect(jsonPath("$.approvalRoute[2].status").value("COMPLETED"));
+	}
+
+	@Test
+	void approvedApplicationIsReadableWithApprovalHistoryByApplicant() throws Exception {
+		String applicationId = submitTravelDraft("承認履歴確認");
+		String taskId = pendingTaskIdForApplication(applicationId);
+
+		mockMvc.perform(post("/api/approval-tasks/{id}/approve", taskId)
+				.with(approverAuth())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "comment": "承認履歴を確認しました"
+					}
+					"""))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.applicationStatus").value("APPROVED"));
+
+		mockMvc.perform(get("/api/applications/{id}", applicationId)
+				.with(applicantAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$.status").value("APPROVED"))
+			.andExpect(jsonPath("$.approvalRoute[2].status").value("COMPLETED"));
+
+		mockMvc.perform(get("/api/applications/{id}/history", applicationId)
+				.with(applicantAuth()))
+			.andExpect(status().isOk())
+			.andExpect(jsonPath("$[0].action").value("SUBMIT"))
+			.andExpect(jsonPath("$[1].action").value("APPROVE"))
+			.andExpect(jsonPath("$[1].actorName").value("岩瀬 大樹"))
+			.andExpect(jsonPath("$[1].comment").value("承認履歴を確認しました"));
 	}
 
 	@Test
