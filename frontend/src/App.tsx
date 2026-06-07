@@ -1,5 +1,15 @@
 import { type FormEvent, useState } from 'react'
 import {
+  applyNodeChanges,
+  Background,
+  Controls,
+  ReactFlow,
+  type Edge as FlowEdge,
+  type Node as FlowNode,
+  type NodeChange,
+} from '@xyflow/react'
+import '@xyflow/react/dist/style.css'
+import {
   BadgeCheck,
   Bell,
   Check,
@@ -43,8 +53,13 @@ import {
   getSavedAuthorization,
   getWorkflowDefinition,
   getWorkflowDefinitions,
+  type WorkflowEdge,
+  type WorkflowNode,
+  publishWorkflowDraft,
   rejectApprovalTask,
   saveAuthorization,
+  saveFormDefinition,
+  saveWorkflowDraft,
   submitApplication,
   uploadApplicationAttachment,
 } from './api'
@@ -87,6 +102,52 @@ function editorInputType(field: FormField) {
     return 'month'
   }
   return 'text'
+}
+
+function createDefaultField(displayOrder: number): FormField {
+  return {
+    fieldKey: `FIELD_${displayOrder}`,
+    label: '新規項目',
+    dataType: 'TEXT',
+    required: false,
+    placeholder: '',
+    initialValueType: 'MANUAL',
+    displayOrder,
+  }
+}
+
+function createDefaultWorkflowNode(displayOrder: number): WorkflowNode {
+  return {
+    nodeKey: `NODE_${displayOrder}`,
+    nodeName: '承認ノード',
+    nodeType: 'APPROVAL',
+    approverType: 'FIXED_EMPLOYEE',
+    positionCode: null,
+    employeeCode: '1005',
+    displayOrder,
+    xPosition: 160 + displayOrder * 12,
+    yPosition: 120,
+  }
+}
+
+function workflowNodesToFlowNodes(nodes: WorkflowNode[]): FlowNode[] {
+  return nodes.map((node) => ({
+    id: node.nodeKey,
+    position: { x: node.xPosition, y: node.yPosition },
+    data: {
+      label: `${node.nodeName} / ${node.nodeType}`,
+    },
+    type: 'default',
+  }))
+}
+
+function workflowEdgesToFlowEdges(edges: WorkflowEdge[]): FlowEdge[] {
+  return edges.map((edge) => ({
+    id: `${edge.sourceNodeKey}-${edge.targetNodeKey}-${edge.displayOrder}`,
+    source: edge.sourceNodeKey,
+    target: edge.targetNodeKey,
+    label: edge.conditionExpression ?? undefined,
+  }))
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
@@ -162,6 +223,18 @@ function App() {
   const [loginPassword, setLoginPassword] = useState<string>(DEMO_PASSWORD)
   const [selectedFormCode, setSelectedFormCode] = useState<string>()
   const [selectedWorkflowCode, setSelectedWorkflowCode] = useState<string>()
+  const [formEditorOverride, setFormEditor] = useState<{
+    formCode: string
+    formName: string
+    workflowCode: string
+    fields: FormField[]
+  } | null>(null)
+  const [workflowEditorOverride, setWorkflowEditor] = useState<{
+    workflowCode: string
+    workflowName: string
+    nodes: WorkflowNode[]
+    edges: WorkflowEdge[]
+  } | null>(null)
   const [applicationTitle, setApplicationTitle] = useState('')
   const [draftValues, setDraftValues] = useState<Record<string, string>>({})
   const [selectedApplicationId, setSelectedApplicationId] = useState<string>()
@@ -289,10 +362,24 @@ function App() {
       : `${approvalTasks.length}件`
   const selectedForm = selectedFormQuery.data
   const selectedWorkflow = selectedWorkflowQuery.data
+  const formEditor = formEditorOverride ?? {
+    formCode: selectedForm?.formCode ?? '',
+    formName: selectedForm?.formName ?? '',
+    workflowCode: selectedForm?.workflowCode ?? workflowDefinitions[0]?.workflowCode ?? '',
+    fields: selectedForm?.fields ?? [],
+  }
+  const workflowEditor = workflowEditorOverride ?? {
+    workflowCode: activeWorkflowCode ?? '',
+    workflowName: selectedWorkflow?.workflowName ?? '',
+    nodes: selectedWorkflow?.nodes ?? [],
+    edges: selectedWorkflow?.edges ?? [],
+  }
   const selectedApplication = selectedApplicationQuery.data
   const applicationHistory = applicationHistoryQuery.data ?? []
   const applicationAttachments = applicationAttachmentsQuery.data ?? []
   const selectedApprovalRoute = selectedApplication?.approvalRoute ?? []
+  const workflowFlowNodes = workflowNodesToFlowNodes(workflowEditor.nodes)
+  const workflowFlowEdges = workflowEdgesToFlowEdges(workflowEditor.edges)
   const loginMutation = useMutation({
     mutationFn: async (credentials: { username: string; password: string }) => {
       const nextAuthorization = buildBasicAuthorization(credentials.username, credentials.password)
@@ -305,6 +392,53 @@ function App() {
       queryClient.setQueryData(['me', result.authorization], result.user)
       void queryClient.invalidateQueries({ queryKey: ['applications'] })
       void queryClient.invalidateQueries({ queryKey: ['approvalTasks'] })
+    },
+  })
+  const saveFormDefinitionMutation = useMutation({
+    mutationFn: saveFormDefinition,
+    onSuccess: (savedFormDefinition) => {
+      setSelectedFormCode(savedFormDefinition.formCode)
+      queryClient.setQueryData(['formDefinition', savedFormDefinition.formCode], savedFormDefinition)
+      void queryClient.invalidateQueries({ queryKey: ['formDefinitions'] })
+    },
+  })
+  const saveWorkflowDraftMutation = useMutation({
+    mutationFn: () =>
+      saveWorkflowDraft(workflowEditor.workflowCode, {
+        workflowName: workflowEditor.workflowName,
+        nodes: workflowEditor.nodes,
+        edges: workflowEditor.edges,
+      }),
+    onSuccess: (savedWorkflowDraft) => {
+      setSelectedWorkflowCode(savedWorkflowDraft.workflowCode)
+      setWorkflowEditor({
+        workflowCode: savedWorkflowDraft.workflowCode,
+        workflowName: savedWorkflowDraft.workflowName,
+        nodes: savedWorkflowDraft.nodes,
+        edges: savedWorkflowDraft.edges,
+      })
+    },
+  })
+  const publishWorkflowDraftMutation = useMutation({
+    mutationFn: async () => {
+      await saveWorkflowDraft(workflowEditor.workflowCode, {
+        workflowName: workflowEditor.workflowName,
+        nodes: workflowEditor.nodes,
+        edges: workflowEditor.edges,
+      })
+      return publishWorkflowDraft(workflowEditor.workflowCode)
+    },
+    onSuccess: (publishedWorkflow) => {
+      setSelectedWorkflowCode(publishedWorkflow.workflowCode)
+      setWorkflowEditor({
+        workflowCode: publishedWorkflow.workflowCode,
+        workflowName: publishedWorkflow.workflowName,
+        nodes: publishedWorkflow.nodes,
+        edges: publishedWorkflow.edges,
+      })
+      void queryClient.invalidateQueries({ queryKey: ['workflowDefinitions'] })
+      void queryClient.invalidateQueries({ queryKey: ['workflowDefinition', publishedWorkflow.workflowCode] })
+      void queryClient.invalidateQueries({ queryKey: ['formDefinitions'] })
     },
   })
   const createDraftMutation = useMutation({
@@ -360,8 +494,152 @@ function App() {
     }))
   }
 
+  function updateFormField(index: number, field: Partial<FormField>) {
+    setFormEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? formEditor
+      return {
+        ...baseEditor,
+        fields: baseEditor.fields.map((currentField, currentIndex) =>
+        currentIndex === index ? { ...currentField, ...field } : currentField,
+        ),
+      }
+    })
+  }
+
+  function addFormField() {
+    setFormEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? formEditor
+      return {
+        ...baseEditor,
+        fields: [...baseEditor.fields, createDefaultField((baseEditor.fields.length + 1) * 10)],
+      }
+    })
+  }
+
+  function removeFormField(index: number) {
+    setFormEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? formEditor
+      return {
+        ...baseEditor,
+        fields: baseEditor.fields.filter((_, currentIndex) => currentIndex !== index),
+      }
+    })
+  }
+
+  function submitFormDefinition(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!formEditor.formCode.trim() || !formEditor.formName.trim() || !formEditor.workflowCode.trim()) {
+      return
+    }
+
+    saveFormDefinitionMutation.mutate(formEditor)
+  }
+
+  function updateWorkflowNode(index: number, node: Partial<WorkflowNode>) {
+    setWorkflowEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? workflowEditor
+      return {
+        ...baseEditor,
+        nodes: baseEditor.nodes.map((currentNode, currentIndex) =>
+        currentIndex === index ? { ...currentNode, ...node } : currentNode,
+        ),
+      }
+    })
+  }
+
+  function updateWorkflowEdge(index: number, edge: Partial<WorkflowEdge>) {
+    setWorkflowEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? workflowEditor
+      return {
+        ...baseEditor,
+        edges: baseEditor.edges.map((currentEdge, currentIndex) =>
+        currentIndex === index ? { ...currentEdge, ...edge } : currentEdge,
+        ),
+      }
+    })
+  }
+
+  function addWorkflowNode() {
+    setWorkflowEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? workflowEditor
+      return {
+        ...baseEditor,
+        nodes: [...baseEditor.nodes, createDefaultWorkflowNode((baseEditor.nodes.length + 1) * 10)],
+      }
+    })
+  }
+
+  function removeWorkflowNode(index: number) {
+    setWorkflowEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? workflowEditor
+      const removedNodeKey = baseEditor.nodes[index]?.nodeKey
+      return {
+        ...baseEditor,
+        nodes: baseEditor.nodes.filter((_, currentIndex) => currentIndex !== index),
+        edges: baseEditor.edges.filter(
+          (edge) => edge.sourceNodeKey !== removedNodeKey && edge.targetNodeKey !== removedNodeKey,
+        ),
+      }
+    })
+  }
+
+  function addWorkflowEdge() {
+    setWorkflowEditor((currentEditor) => {
+      const baseEditor = currentEditor ?? workflowEditor
+      return {
+        ...baseEditor,
+        edges: [
+          ...baseEditor.edges,
+        {
+          sourceNodeKey: baseEditor.nodes[0]?.nodeKey ?? '',
+          targetNodeKey: baseEditor.nodes[1]?.nodeKey ?? '',
+          conditionExpression: null,
+          displayOrder: (baseEditor.edges.length + 1) * 10,
+        },
+      ],
+      }
+    })
+  }
+
+  function onWorkflowNodesChange(changes: NodeChange[]) {
+    const nextFlowNodes = applyNodeChanges(changes, workflowFlowNodes)
+    setWorkflowEditor((currentEditor) => ({
+      ...(currentEditor ?? workflowEditor),
+      nodes: (currentEditor ?? workflowEditor).nodes.map((node) => {
+        const flowNode = nextFlowNodes.find((nextNode) => nextNode.id === node.nodeKey)
+        return flowNode
+          ? {
+              ...node,
+              xPosition: Math.round(flowNode.position.x),
+              yPosition: Math.round(flowNode.position.y),
+            }
+          : node
+      }),
+    }))
+  }
+
+  function submitWorkflowDraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    if (!workflowEditor.workflowCode.trim() || !workflowEditor.workflowName.trim()) {
+      return
+    }
+
+    saveWorkflowDraftMutation.mutate()
+  }
+
+  function publishWorkflowDraftAction() {
+    if (!workflowEditor.workflowCode.trim()) {
+      return
+    }
+
+    publishWorkflowDraftMutation.mutate()
+  }
+
   function selectForm(formCode: string) {
     setSelectedFormCode(formCode)
+    setFormEditor(null)
     setApplicationTitle('')
     setDraftValues({})
     createDraftMutation.reset()
@@ -369,6 +647,7 @@ function App() {
 
   function selectWorkflow(workflowCode: string) {
     setSelectedWorkflowCode(workflowCode)
+    setWorkflowEditor(null)
   }
 
   function selectApplication(applicationId: string) {
@@ -1023,6 +1302,161 @@ function App() {
                         </span>
                       ))}
                     </div>
+
+                    <form className="definition-editor" onSubmit={submitWorkflowDraft}>
+                      <div className="editor-toolbar">
+                        <label className="draft-field">
+                          <span>ワークフロー名</span>
+                          <input
+                            value={workflowEditor.workflowName}
+                            onChange={(event) =>
+                              setWorkflowEditor((currentEditor) => {
+                                const baseEditor = currentEditor ?? workflowEditor
+                                return {
+                                  ...baseEditor,
+                                  workflowName: event.target.value,
+                                }
+                              })
+                            }
+                          />
+                        </label>
+                        <div className="editor-actions">
+                          {saveWorkflowDraftMutation.isError ? (
+                            <span className="draft-message error">草稿を保存できません</span>
+                          ) : null}
+                          {saveWorkflowDraftMutation.data ? (
+                            <span className="draft-message">Version {saveWorkflowDraftMutation.data.versionNumber} を保存しました</span>
+                          ) : null}
+                          {publishWorkflowDraftMutation.isError ? (
+                            <span className="draft-message error">公開できません</span>
+                          ) : null}
+                          {publishWorkflowDraftMutation.data ? (
+                            <span className="draft-message">Version {publishWorkflowDraftMutation.data.versionNumber} を公開しました</span>
+                          ) : null}
+                          <button
+                            className="secondary-button"
+                            disabled={saveWorkflowDraftMutation.isPending}
+                            type="submit"
+                          >
+                            {saveWorkflowDraftMutation.isPending ? '保存中' : '草稿保存'}
+                          </button>
+                          <button
+                            className="primary-button"
+                            disabled={saveWorkflowDraftMutation.isPending || publishWorkflowDraftMutation.isPending}
+                            onClick={publishWorkflowDraftAction}
+                            type="button"
+                          >
+                            {publishWorkflowDraftMutation.isPending ? '保存・公開中' : '公開'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="workflow-canvas" aria-label="ワークフロー編集キャンバス">
+                        <ReactFlow
+                          edges={workflowFlowEdges}
+                          fitView
+                          nodes={workflowFlowNodes}
+                          onNodesChange={onWorkflowNodesChange}
+                        >
+                          <Background />
+                          <Controls />
+                        </ReactFlow>
+                      </div>
+
+                      <div className="editor-section-title">
+                        <strong>ノード</strong>
+                        <button className="icon-text-button" onClick={addWorkflowNode} type="button">
+                          追加
+                        </button>
+                      </div>
+                      <div className="workflow-editor-table">
+                        {workflowEditor.nodes.map((node, index) => (
+                          <div className="workflow-editor-row" key={`${node.nodeKey}-${index}`}>
+                            <input
+                              value={node.nodeKey}
+                              onChange={(event) => updateWorkflowNode(index, { nodeKey: event.target.value })}
+                            />
+                            <input
+                              value={node.nodeName}
+                              onChange={(event) => updateWorkflowNode(index, { nodeName: event.target.value })}
+                            />
+                            <select
+                              value={node.nodeType}
+                              onChange={(event) => updateWorkflowNode(index, { nodeType: event.target.value })}
+                            >
+                              <option value="APPLICANT">APPLICANT</option>
+                              <option value="APPROVAL">APPROVAL</option>
+                              <option value="BRANCH">BRANCH</option>
+                              <option value="END">END</option>
+                            </select>
+                            <select
+                              value={node.approverType ?? ''}
+                              onChange={(event) =>
+                                updateWorkflowNode(index, { approverType: event.target.value || null })
+                              }
+                            >
+                              <option value="">-</option>
+                              <option value="FIXED_EMPLOYEE">FIXED_EMPLOYEE</option>
+                              <option value="POSITION">POSITION</option>
+                            </select>
+                            <input
+                              value={node.positionCode ?? ''}
+                              onChange={(event) =>
+                                updateWorkflowNode(index, { positionCode: event.target.value || null })
+                              }
+                            />
+                            <input
+                              value={node.employeeCode ?? ''}
+                              onChange={(event) =>
+                                updateWorkflowNode(index, { employeeCode: event.target.value || null })
+                              }
+                            />
+                            <button className="icon-button" onClick={() => removeWorkflowNode(index)} type="button">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="editor-section-title">
+                        <strong>連線</strong>
+                        <button className="icon-text-button" onClick={addWorkflowEdge} type="button">
+                          追加
+                        </button>
+                      </div>
+                      <div className="workflow-editor-table">
+                        {workflowEditor.edges.map((edge, index) => (
+                          <div className="workflow-editor-row edge" key={`${edge.sourceNodeKey}-${edge.targetNodeKey}-${index}`}>
+                            <select
+                              value={edge.sourceNodeKey}
+                              onChange={(event) => updateWorkflowEdge(index, { sourceNodeKey: event.target.value })}
+                            >
+                              {workflowEditor.nodes.map((node) => (
+                                <option key={node.nodeKey} value={node.nodeKey}>
+                                  {node.nodeKey}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              value={edge.targetNodeKey}
+                              onChange={(event) => updateWorkflowEdge(index, { targetNodeKey: event.target.value })}
+                            >
+                              {workflowEditor.nodes.map((node) => (
+                                <option key={node.nodeKey} value={node.nodeKey}>
+                                  {node.nodeKey}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              value={edge.conditionExpression ?? ''}
+                              onChange={(event) =>
+                                updateWorkflowEdge(index, { conditionExpression: event.target.value || null })
+                              }
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    </form>
                   </>
                 ) : (
                   <div className="compact-row">ワークフローを選択してください</div>
@@ -1101,6 +1535,104 @@ function App() {
                         </label>
                       ))}
                     </div>
+
+                    <form className="definition-editor" onSubmit={submitFormDefinition}>
+                      <div className="editor-toolbar">
+                        <label className="draft-field">
+                          <span>申請書名</span>
+                          <input
+                            value={formEditor.formName}
+                            onChange={(event) =>
+                              setFormEditor((currentEditor) => {
+                                const baseEditor = currentEditor ?? formEditor
+                                return {
+                                  ...baseEditor,
+                                  formName: event.target.value,
+                                }
+                              })
+                            }
+                          />
+                        </label>
+                        <label className="draft-field">
+                          <span>ワークフロー</span>
+                          <select
+                            value={formEditor.workflowCode}
+                            onChange={(event) =>
+                              setFormEditor((currentEditor) => {
+                                const baseEditor = currentEditor ?? formEditor
+                                return {
+                                  ...baseEditor,
+                                  workflowCode: event.target.value,
+                                }
+                              })
+                            }
+                          >
+                            {workflowDefinitions.map((workflowDefinition) => (
+                              <option key={workflowDefinition.workflowCode} value={workflowDefinition.workflowCode}>
+                                {workflowDefinition.workflowName}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <div className="editor-actions">
+                          {saveFormDefinitionMutation.isError ? (
+                            <span className="draft-message error">申請書定義を保存できません</span>
+                          ) : null}
+                          {saveFormDefinitionMutation.data ? (
+                            <span className="draft-message">申請書定義を保存しました</span>
+                          ) : null}
+                          <button className="primary-button" disabled={saveFormDefinitionMutation.isPending}>
+                            {saveFormDefinitionMutation.isPending ? '保存中' : '定義保存'}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="editor-section-title">
+                        <strong>項目定義</strong>
+                        <button className="icon-text-button" onClick={addFormField} type="button">
+                          追加
+                        </button>
+                      </div>
+                      <div className="form-field-editor-list">
+                        {formEditor.fields.map((field, index) => (
+                          <div className="form-field-editor-row" key={`${field.fieldKey}-${index}`}>
+                            <input
+                              value={field.fieldKey}
+                              onChange={(event) => updateFormField(index, { fieldKey: event.target.value })}
+                            />
+                            <input
+                              value={field.label}
+                              onChange={(event) => updateFormField(index, { label: event.target.value })}
+                            />
+                            <select
+                              value={field.dataType}
+                              onChange={(event) => updateFormField(index, { dataType: event.target.value })}
+                            >
+                              <option value="TEXT">TEXT</option>
+                              <option value="TEXTAREA">TEXTAREA</option>
+                              <option value="NUMBER">NUMBER</option>
+                              <option value="DATE">DATE</option>
+                              <option value="MONTH">MONTH</option>
+                            </select>
+                            <label className="editor-check">
+                              <input
+                                checked={field.required}
+                                onChange={(event) => updateFormField(index, { required: event.target.checked })}
+                                type="checkbox"
+                              />
+                              必須
+                            </label>
+                            <input
+                              value={field.placeholder ?? ''}
+                              onChange={(event) => updateFormField(index, { placeholder: event.target.value })}
+                            />
+                            <button className="icon-button" onClick={() => removeFormField(index)} type="button">
+                              <X size={14} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </form>
                   </>
                 )}
               </div>

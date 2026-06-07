@@ -27,6 +27,21 @@ public class WorkflowDefinition {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    protected WorkflowDefinition() {
+    }
+
+    public WorkflowDefinition(String workflowCode, String workflowName) {
+        this.id = UUID.randomUUID();
+        this.workflowCode = workflowCode;
+        this.workflowName = workflowName;
+        this.active = true;
+        this.createdAt = Instant.now();
+    }
+
+    public void updateName(String workflowName) {
+        this.workflowName = workflowName;
+    }
+
     public UUID getId() {
         return id;
     }

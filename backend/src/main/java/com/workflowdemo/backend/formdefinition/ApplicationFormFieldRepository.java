@@ -10,6 +10,8 @@ public interface ApplicationFormFieldRepository extends JpaRepository<Applicatio
 
     List<ApplicationFormField> findByFormDefinitionIdAndActiveTrueOrderByDisplayOrderAsc(UUID formDefinitionId);
 
+    List<ApplicationFormField> findByFormDefinitionIdOrderByDisplayOrderAsc(UUID formDefinitionId);
+
     @Query("""
         select f.formDefinitionId, count(f)
         from ApplicationFormField f

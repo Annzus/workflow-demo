@@ -29,6 +29,24 @@ public class WorkflowEdge {
     @Column(name = "display_order", nullable = false)
     private int displayOrder;
 
+    protected WorkflowEdge() {
+    }
+
+    WorkflowEdge(
+        UUID workflowVersionId,
+        String sourceNodeKey,
+        String targetNodeKey,
+        String conditionExpression,
+        int displayOrder
+    ) {
+        this.id = UUID.randomUUID();
+        this.workflowVersionId = workflowVersionId;
+        this.sourceNodeKey = sourceNodeKey;
+        this.targetNodeKey = targetNodeKey;
+        this.conditionExpression = conditionExpression;
+        this.displayOrder = displayOrder;
+    }
+
     public UUID getId() {
         return id;
     }

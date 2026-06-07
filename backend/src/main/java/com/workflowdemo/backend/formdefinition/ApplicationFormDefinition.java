@@ -30,6 +30,23 @@ public class ApplicationFormDefinition {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    protected ApplicationFormDefinition() {
+    }
+
+    ApplicationFormDefinition(String formCode, String formName, UUID workflowDefinitionId) {
+        this.id = UUID.randomUUID();
+        this.formCode = formCode;
+        this.formName = formName;
+        this.workflowDefinitionId = workflowDefinitionId;
+        this.active = true;
+        this.createdAt = Instant.now();
+    }
+
+    void update(String formName, UUID workflowDefinitionId) {
+        this.formName = formName;
+        this.workflowDefinitionId = workflowDefinitionId;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -46,7 +63,7 @@ public class ApplicationFormDefinition {
         return workflowDefinitionId;
     }
 
-    boolean isActive() {
+    public boolean isActive() {
         return active;
     }
 

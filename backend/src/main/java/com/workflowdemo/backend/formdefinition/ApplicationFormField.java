@@ -44,7 +44,33 @@ public class ApplicationFormField {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    UUID getId() {
+    protected ApplicationFormField() {
+    }
+
+    ApplicationFormField(
+        UUID formDefinitionId,
+        String fieldKey,
+        String label,
+        String dataType,
+        boolean required,
+        String placeholder,
+        String initialValueType,
+        int displayOrder
+    ) {
+        this.id = UUID.randomUUID();
+        this.formDefinitionId = formDefinitionId;
+        this.fieldKey = fieldKey;
+        this.label = label;
+        this.dataType = dataType;
+        this.required = required;
+        this.placeholder = placeholder;
+        this.initialValueType = initialValueType;
+        this.displayOrder = displayOrder;
+        this.active = true;
+        this.createdAt = Instant.now();
+    }
+
+    public UUID getId() {
         return id;
     }
 
@@ -68,11 +94,11 @@ public class ApplicationFormField {
         return required;
     }
 
-    String getPlaceholder() {
+    public String getPlaceholder() {
         return placeholder;
     }
 
-    String getInitialValueType() {
+    public String getInitialValueType() {
         return initialValueType;
     }
 
@@ -80,7 +106,7 @@ public class ApplicationFormField {
         return displayOrder;
     }
 
-    boolean isActive() {
+    public boolean isActive() {
         return active;
     }
 

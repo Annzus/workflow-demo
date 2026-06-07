@@ -6,8 +6,15 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import jakarta.transaction.Transactional;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -74,6 +81,59 @@ class FormDefinitionController {
         return FormDefinitionDetailResponse.from(formDefinition, workflowDefinition, fields);
     }
 
+    @PostMapping
+    @Transactional
+    FormDefinitionDetailResponse saveFormDefinition(@Valid @RequestBody SaveFormDefinitionRequest request) {
+        validateFields(request.fields());
+        WorkflowDefinition workflowDefinition = workflowDefinitionRepository
+            .findByWorkflowCodeAndActiveTrue(normalizeCode(request.workflowCode()))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow definition not found"));
+        String formCode = normalizeCode(request.formCode());
+        ApplicationFormDefinition formDefinition = formDefinitionRepository.findByFormCodeAndActiveTrue(formCode)
+            .map(existingFormDefinition -> {
+                existingFormDefinition.update(trimRequired(request.formName(), "formName"), workflowDefinition.getId());
+                return existingFormDefinition;
+            })
+            .orElseGet(() -> new ApplicationFormDefinition(
+                formCode,
+                trimRequired(request.formName(), "formName"),
+                workflowDefinition.getId()
+            ));
+        ApplicationFormDefinition savedFormDefinition = formDefinitionRepository.save(formDefinition);
+
+        formFieldRepository.deleteAll(
+            formFieldRepository.findByFormDefinitionIdOrderByDisplayOrderAsc(savedFormDefinition.getId())
+        );
+        formFieldRepository.flush();
+        List<ApplicationFormField> fields = request.fields().stream()
+            .map(field -> field.toEntity(savedFormDefinition.getId()))
+            .toList();
+        formFieldRepository.saveAll(fields);
+
+        return FormDefinitionDetailResponse.from(savedFormDefinition, workflowDefinition, fields);
+    }
+
+    private static void validateFields(List<SaveFormFieldRequest> fields) {
+        Map<String, Long> countByFieldKey = fields.stream()
+            .collect(Collectors.groupingBy(field -> trimRequired(field.fieldKey(), "fieldKey"), Collectors.counting()));
+        boolean hasDuplicateFieldKey = countByFieldKey.values().stream().anyMatch(count -> count > 1);
+        if (hasDuplicateFieldKey) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Field key must be unique");
+        }
+    }
+
+    private static String normalizeCode(String value) {
+        return trimRequired(value, "code").toUpperCase();
+    }
+
+    private static String trimRequired(String value, String fieldName) {
+        String trimmed = value == null ? "" : value.trim();
+        if (trimmed.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, fieldName + " is required");
+        }
+        return trimmed;
+    }
+
     record FormDefinitionSummaryResponse(
         String formCode,
         String formName,
@@ -136,6 +196,37 @@ class FormDefinitionController {
                 field.getPlaceholder(),
                 field.getInitialValueType(),
                 field.getDisplayOrder()
+            );
+        }
+    }
+
+    record SaveFormDefinitionRequest(
+        @NotBlank String formCode,
+        @NotBlank String formName,
+        @NotBlank String workflowCode,
+        @NotEmpty List<@Valid SaveFormFieldRequest> fields
+    ) {
+    }
+
+    record SaveFormFieldRequest(
+        @NotBlank String fieldKey,
+        @NotBlank String label,
+        @NotBlank String dataType,
+        boolean required,
+        String placeholder,
+        String initialValueType,
+        int displayOrder
+    ) {
+        ApplicationFormField toEntity(UUID formDefinitionId) {
+            return new ApplicationFormField(
+                formDefinitionId,
+                trimRequired(fieldKey, "fieldKey"),
+                trimRequired(label, "label"),
+                normalizeCode(dataType),
+                required,
+                placeholder == null || placeholder.isBlank() ? null : placeholder.trim(),
+                initialValueType == null || initialValueType.isBlank() ? "MANUAL" : normalizeCode(initialValueType),
+                displayOrder
             );
         }
     }

@@ -76,6 +76,28 @@ export type WorkflowDefinitionDetail = WorkflowDefinitionSummary & {
   edges: WorkflowEdge[]
 }
 
+export type SaveFormDefinitionRequest = {
+  formCode: string
+  formName: string
+  workflowCode: string
+  fields: FormField[]
+}
+
+export type SaveWorkflowDraftRequest = {
+  workflowName: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+}
+
+export type WorkflowDraftResponse = {
+  workflowCode: string
+  workflowName: string
+  versionNumber: number
+  published: boolean
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+}
+
 export type CreateDraftApplicationRequest = {
   formCode: string
   title: string
@@ -275,6 +297,32 @@ export function getWorkflowDefinitions() {
 
 export function getWorkflowDefinition(workflowCode: string) {
   return getJson<WorkflowDefinitionDetail>(`/api/workflow-definitions/${workflowCode}`)
+}
+
+export function saveFormDefinition(request: SaveFormDefinitionRequest) {
+  return postJson<FormDefinitionDetail, SaveFormDefinitionRequest>('/api/form-definitions', request, {
+    authorization: currentAuthorization(),
+  })
+}
+
+export function saveWorkflowDraft(workflowCode: string, request: SaveWorkflowDraftRequest) {
+  return postJson<WorkflowDraftResponse, SaveWorkflowDraftRequest>(
+    `/api/workflow-definitions/${workflowCode}/draft`,
+    request,
+    {
+      authorization: currentAuthorization(),
+    },
+  )
+}
+
+export function publishWorkflowDraft(workflowCode: string) {
+  return postJson<WorkflowDraftResponse, Record<string, never>>(
+    `/api/workflow-definitions/${workflowCode}/publish`,
+    {},
+    {
+      authorization: currentAuthorization(),
+    },
+  )
 }
 
 export function getMe(authorization = currentAuthorization()) {

@@ -44,6 +44,34 @@ public class WorkflowNode {
     @Column(name = "y_position", nullable = false)
     private int yPosition;
 
+    protected WorkflowNode() {
+    }
+
+    WorkflowNode(
+        UUID workflowVersionId,
+        String nodeKey,
+        String nodeName,
+        String nodeType,
+        String approverType,
+        String positionCode,
+        String employeeCode,
+        int displayOrder,
+        int xPosition,
+        int yPosition
+    ) {
+        this.id = UUID.randomUUID();
+        this.workflowVersionId = workflowVersionId;
+        this.nodeKey = nodeKey;
+        this.nodeName = nodeName;
+        this.nodeType = nodeType;
+        this.approverType = approverType;
+        this.positionCode = positionCode;
+        this.employeeCode = employeeCode;
+        this.displayOrder = displayOrder;
+        this.xPosition = xPosition;
+        this.yPosition = yPosition;
+    }
+
     public UUID getId() {
         return id;
     }

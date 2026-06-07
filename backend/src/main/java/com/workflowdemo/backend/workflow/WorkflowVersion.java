@@ -27,6 +27,21 @@ public class WorkflowVersion {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    protected WorkflowVersion() {
+    }
+
+    WorkflowVersion(UUID workflowDefinitionId, int versionNumber, boolean published) {
+        this.id = UUID.randomUUID();
+        this.workflowDefinitionId = workflowDefinitionId;
+        this.versionNumber = versionNumber;
+        this.published = published;
+        this.createdAt = Instant.now();
+    }
+
+    void publish() {
+        this.published = true;
+    }
+
     public UUID getId() {
         return id;
     }

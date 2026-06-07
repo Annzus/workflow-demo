@@ -112,6 +112,184 @@ class BackendApplicationTests {
 	}
 
 	@Test
+	void saveFormDefinitionCreatesAndUpdatesFields() throws Exception {
+		try {
+			mockMvc.perform(post("/api/form-definitions")
+					.with(applicantAuth())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "formCode": "TEST_FORM",
+						  "formName": "テスト申請",
+						  "workflowCode": "WF-DEPT-APPROVAL",
+						  "fields": [
+						    {
+						      "fieldKey": "subject",
+						      "label": "件名",
+						      "dataType": "TEXT",
+						      "required": true,
+						      "placeholder": "件名を入力",
+						      "initialValueType": "NONE",
+						      "displayOrder": 10
+						    },
+						    {
+						      "fieldKey": "memo",
+						      "label": "メモ",
+						      "dataType": "TEXTAREA",
+						      "required": false,
+						      "placeholder": "補足を入力",
+						      "initialValueType": "NONE",
+						      "displayOrder": 20
+						    }
+						  ]
+						}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.formCode").value("TEST_FORM"))
+				.andExpect(jsonPath("$.fields[1].label").value("メモ"));
+
+			mockMvc.perform(post("/api/form-definitions")
+					.with(applicantAuth())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "formCode": "TEST_FORM",
+						  "formName": "テスト申請 改訂",
+						  "workflowCode": "WF-GENERAL-AFFAIRS",
+						  "fields": [
+						    {
+						      "fieldKey": "subject",
+						      "label": "件名 改訂",
+						      "dataType": "TEXT",
+						      "required": true,
+						      "placeholder": "件名を入力",
+						      "initialValueType": "NONE",
+						      "displayOrder": 10
+						    }
+						  ]
+						}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.formName").value("テスト申請 改訂"))
+				.andExpect(jsonPath("$.workflowCode").value("WF-GENERAL-AFFAIRS"))
+				.andExpect(jsonPath("$.fields.length()").value(1))
+				.andExpect(jsonPath("$.fields[0].label").value("件名 改訂"));
+		} finally {
+			deleteTestFormDefinition();
+		}
+	}
+
+	@Test
+	void saveWorkflowDraftAndPublishMakesItReadableAsActiveVersion() throws Exception {
+		try {
+			mockMvc.perform(post("/api/workflow-definitions/{workflowCode}/draft", "WF-STEP6-TEST")
+					.with(applicantAuth())
+					.contentType(MediaType.APPLICATION_JSON)
+					.content("""
+						{
+						  "workflowName": "Step6 テストルート",
+						  "nodes": [
+						    {
+						      "nodeKey": "applicant",
+						      "nodeName": "申請者",
+						      "nodeType": "APPLICANT",
+						      "displayOrder": 10,
+						      "xPosition": 80,
+						      "yPosition": 90
+						    },
+						    {
+						      "nodeKey": "approval",
+						      "nodeName": "確認承認",
+						      "nodeType": "APPROVAL",
+						      "approverType": "FIXED_EMPLOYEE",
+						      "employeeCode": "1005",
+						      "displayOrder": 20,
+						      "xPosition": 260,
+						      "yPosition": 90
+						    },
+						    {
+						      "nodeKey": "finish",
+						      "nodeName": "完了",
+						      "nodeType": "END",
+						      "displayOrder": 30,
+						      "xPosition": 440,
+						      "yPosition": 90
+						    }
+						  ],
+						  "edges": [
+						    {
+						      "sourceNodeKey": "applicant",
+						      "targetNodeKey": "approval",
+						      "displayOrder": 10
+						    },
+						    {
+						      "sourceNodeKey": "approval",
+						      "targetNodeKey": "finish",
+						      "conditionExpression": "approved",
+						      "displayOrder": 20
+						    }
+						  ]
+						}
+						"""))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.workflowCode").value("WF-STEP6-TEST"))
+				.andExpect(jsonPath("$.versionNumber").value(1))
+				.andExpect(jsonPath("$.published").value(false));
+
+			mockMvc.perform(post("/api/workflow-definitions/{workflowCode}/publish", "WF-STEP6-TEST")
+					.with(applicantAuth()))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.published").value(true));
+
+			mockMvc.perform(get("/api/workflow-definitions/{workflowCode}", "WF-STEP6-TEST"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.workflowName").value("Step6 テストルート"))
+				.andExpect(jsonPath("$.activeVersion").value(1))
+				.andExpect(jsonPath("$.nodes[1].nodeName").value("確認承認"));
+		} finally {
+			deleteTestWorkflowDefinition();
+		}
+	}
+
+	@Test
+	void saveWorkflowDraftRejectsApprovalNodeWithoutApprover() throws Exception {
+		mockMvc.perform(post("/api/workflow-definitions/{workflowCode}/draft", "WF-INVALID-APPROVER")
+				.with(applicantAuth())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("""
+					{
+					  "workflowName": "承認者未設定ルート",
+					  "nodes": [
+					    {
+					      "nodeKey": "applicant",
+					      "nodeName": "申請者",
+					      "nodeType": "APPLICANT",
+					      "displayOrder": 10,
+					      "xPosition": 80,
+					      "yPosition": 90
+					    },
+					    {
+					      "nodeKey": "approval",
+					      "nodeName": "確認承認",
+					      "nodeType": "APPROVAL",
+					      "displayOrder": 20,
+					      "xPosition": 260,
+					      "yPosition": 90
+					    }
+					  ],
+					  "edges": [
+					    {
+					      "sourceNodeKey": "applicant",
+					      "targetNodeKey": "approval",
+					      "displayOrder": 10
+					    }
+					  ]
+					}
+					"""))
+			.andExpect(status().isBadRequest());
+	}
+
+	@Test
 	void currentUserRequiresAuthentication() throws Exception {
 		mockMvc.perform(get("/api/me"))
 			.andExpect(status().isUnauthorized());
@@ -565,6 +743,44 @@ class BackendApplicationTests {
 		jdbcTemplate.update("delete from workflow_edges where workflow_version_id = '93000000-0000-0000-0000-000000000099'");
 		jdbcTemplate.update("delete from workflow_nodes where workflow_version_id = '93000000-0000-0000-0000-000000000099'");
 		jdbcTemplate.update("delete from workflow_versions where id = '93000000-0000-0000-0000-000000000099'");
+	}
+
+	private void deleteTestFormDefinition() {
+		jdbcTemplate.update("""
+			delete from application_form_fields
+			where form_definition_id in (
+			    select id from application_form_definitions where form_code = 'TEST_FORM'
+			)
+			""");
+		jdbcTemplate.update("delete from application_form_definitions where form_code = 'TEST_FORM'");
+	}
+
+	private void deleteTestWorkflowDefinition() {
+		jdbcTemplate.update("""
+			delete from workflow_edges
+			where workflow_version_id in (
+			    select id from workflow_versions
+			    where workflow_definition_id in (
+			        select id from workflow_definitions where workflow_code = 'WF-STEP6-TEST'
+			    )
+			)
+			""");
+		jdbcTemplate.update("""
+			delete from workflow_nodes
+			where workflow_version_id in (
+			    select id from workflow_versions
+			    where workflow_definition_id in (
+			        select id from workflow_definitions where workflow_code = 'WF-STEP6-TEST'
+			    )
+			)
+			""");
+		jdbcTemplate.update("""
+			delete from workflow_versions
+			where workflow_definition_id in (
+			    select id from workflow_definitions where workflow_code = 'WF-STEP6-TEST'
+			)
+			""");
+		jdbcTemplate.update("delete from workflow_definitions where workflow_code = 'WF-STEP6-TEST'");
 	}
 
 	private String pendingTaskIdForApplication(String applicationId) throws Exception {

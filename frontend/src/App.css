@@ -260,7 +260,9 @@ h2 {
 }
 
 .icon-button,
-.primary-button {
+.icon-text-button,
+.primary-button,
+.secondary-button {
   border: 0;
   border-radius: 6px;
   display: inline-flex;
@@ -282,6 +284,21 @@ h2 {
   background: #17201b;
   color: #fff;
   font-weight: 700;
+}
+
+.secondary-button,
+.icon-text-button {
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #cfd8d0;
+  background: #fff;
+  color: #17201b;
+  font-weight: 800;
+}
+
+.icon-text-button {
+  height: 30px;
+  font-size: 12px;
 }
 
 .summary-grid {
@@ -1083,6 +1100,114 @@ h2 {
   align-items: center;
 }
 
+.definition-editor {
+  margin-top: 16px;
+  border-top: 1px solid #dfe5df;
+  padding-top: 14px;
+  display: grid;
+  gap: 14px;
+}
+
+.editor-toolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.editor-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.editor-section-title {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-section-title strong {
+  color: #17201b;
+  font-size: 13px;
+}
+
+.workflow-canvas {
+  height: 260px;
+  border: 1px solid #dfe5df;
+  border-radius: 7px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.workflow-editor-table,
+.form-field-editor-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-editor-row,
+.form-field-editor-row {
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  gap: 8px;
+}
+
+.workflow-editor-row {
+  grid-template-columns:
+    minmax(96px, 0.9fr) minmax(120px, 1fr) 104px minmax(128px, 1fr) 82px 82px
+    42px;
+}
+
+.workflow-editor-row.edge {
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(120px, 1fr);
+}
+
+.form-field-editor-row {
+  grid-template-columns: minmax(96px, 0.9fr) minmax(130px, 1.2fr) 116px 70px minmax(120px, 1fr) 42px;
+}
+
+.workflow-editor-row input,
+.workflow-editor-row select,
+.form-field-editor-row input,
+.form-field-editor-row select,
+.definition-editor input,
+.definition-editor select {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid #cfd8d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #17201b;
+  padding: 0 9px;
+}
+
+.editor-check {
+  height: 36px;
+  border: 1px solid #cfd8d0;
+  border-radius: 6px;
+  background: #fff;
+  color: #334139;
+  font-size: 12px;
+  font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.editor-check input {
+  width: 14px;
+  height: 14px;
+}
+
 .form-preview-grid {
   margin-top: 14px;
   display: grid;
@@ -1229,7 +1354,8 @@ textarea.preview-input {
   color: #8b4b3f;
 }
 
-.primary-button:disabled {
+.primary-button:disabled,
+.secondary-button:disabled {
   cursor: not-allowed;
   opacity: 0.58;
 }
@@ -1281,6 +1407,7 @@ textarea.preview-input {
   .draft-form,
   .definition-layout,
   .workflow-definition-layout,
+  .editor-toolbar,
   .form-preview-grid,
   .master-grid {
     grid-template-columns: 1fr;
@@ -1313,6 +1440,9 @@ textarea.preview-input {
   .approval-task-row,
   .approval-route-step,
   .workflow-node-row,
+  .workflow-editor-row,
+  .workflow-editor-row.edge,
+  .form-field-editor-row,
   .attachment-row,
   .attachment-upload {
     grid-template-columns: 1fr;

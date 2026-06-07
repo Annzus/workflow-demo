@@ -58,11 +58,17 @@ public class WorkflowRouteService {
     }
 
     private Employee resolveApprover(WorkflowNode approvalNode) {
-        if (!"FIXED_EMPLOYEE".equals(approvalNode.getApproverType()) || approvalNode.getEmployeeCode() == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Approval node approver is not configured");
+        if ("FIXED_EMPLOYEE".equals(approvalNode.getApproverType()) && approvalNode.getEmployeeCode() != null) {
+            return employeeRepository.findByEmployeeCodeAndActiveTrue(approvalNode.getEmployeeCode())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow approver not found"));
         }
-        return employeeRepository.findByEmployeeCodeAndActiveTrue(approvalNode.getEmployeeCode())
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow approver not found"));
+        if ("POSITION".equals(approvalNode.getApproverType()) && approvalNode.getPositionCode() != null) {
+            return employeeRepository.findActiveEmployeesByPositionCode(approvalNode.getPositionCode())
+                .stream()
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Workflow approver not found"));
+        }
+        throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Approval node approver is not configured");
     }
 
     public record WorkflowRoute(
