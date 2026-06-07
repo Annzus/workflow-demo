@@ -31,9 +31,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @ActiveProfiles("test")
 class BackendApplicationTests {
 
-	private static final String APPLICANT_USERNAME = "demo1@growtea.co.jp";
+	private static final String APPLICANT_USERNAME = "demo1@example.local";
 	private static final String APPLICANT_PASSWORD = "demo1001";
-	private static final String APPROVER_USERNAME = "demo5@growtea.co.jp";
+	private static final String APPROVER_USERNAME = "demo5@example.local";
 	private static final String APPROVER_PASSWORD = "demo1005";
 
 	@Autowired

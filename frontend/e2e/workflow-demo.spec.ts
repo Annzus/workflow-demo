@@ -1,13 +1,13 @@
 import { expect, test, type APIRequestContext, type Page } from '@playwright/test'
 
 const applicantAccount = {
-  username: 'demo1@growtea.co.jp',
+  username: 'demo1@example.local',
   password: 'demo1001',
   employeeName: '山田 太郎',
 }
 
 const approverAccount = {
-  username: 'demo5@growtea.co.jp',
+  username: 'demo5@example.local',
   password: 'demo1005',
   employeeName: '岩瀬 大樹',
 }

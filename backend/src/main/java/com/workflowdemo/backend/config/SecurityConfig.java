@@ -41,11 +41,11 @@ class SecurityConfig {
     @Bean
     UserDetailsService userDetailsService() {
         return new InMemoryUserDetailsManager(
-            User.withUsername("demo1@growtea.co.jp")
+            User.withUsername("demo1@example.local")
                 .password("{noop}demo1001")
                 .roles("DEMO_USER")
                 .build(),
-            User.withUsername("demo5@growtea.co.jp")
+            User.withUsername("demo5@example.local")
                 .password("{noop}demo1005")
                 .roles("DEMO_USER")
                 .build()

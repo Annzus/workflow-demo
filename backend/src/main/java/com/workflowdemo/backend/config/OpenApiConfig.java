@@ -26,8 +26,8 @@ class OpenApiConfig {
                     Java 21 / Spring Boot workflow approval demo API.
 
                     Demo Basic Auth accounts:
-                    - applicant: demo1@growtea.co.jp / demo1001
-                    - approver: demo5@growtea.co.jp / demo1005
+                    - applicant: demo1@example.local / demo1001
+                    - approver: demo5@example.local / demo1005
                     """)
                 .license(new License().name("Portfolio demo")))
             .addServersItem(new Server().url("http://localhost:8080").description("Local backend"))

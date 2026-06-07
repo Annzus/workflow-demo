@@ -198,13 +198,13 @@ const AUTH_STORAGE_KEY = 'workflowDemoAuthorization'
 export const DEMO_ACCOUNTS = [
   {
     label: '申請者',
-    username: 'demo1@growtea.co.jp',
+    username: 'demo1@example.local',
     password: 'demo1001',
     employeeName: '山田 太郎',
   },
   {
     label: '承認者',
-    username: 'demo5@growtea.co.jp',
+    username: 'demo5@example.local',
     password: 'demo1005',
     employeeName: '岩瀬 大樹',
   },

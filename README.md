@@ -140,8 +140,8 @@ If Vite only listens on `::1`, use `http://localhost:5173/` instead of `http://1
 
 | Role | Username | Password | Employee |
 | --- | --- | --- | --- |
-| Applicant | `demo1@growtea.co.jp` | `demo1001` | `山田 太郎` |
-| Approver | `demo5@growtea.co.jp` | `demo1005` | `岩瀬 大樹` |
+| Applicant | `demo1@example.local` | `demo1001` | `山田 太郎` |
+| Approver | `demo5@example.local` | `demo1005` | `岩瀬 大樹` |
 
 ## API Documentation
 

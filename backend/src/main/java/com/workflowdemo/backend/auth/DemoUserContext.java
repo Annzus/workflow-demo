@@ -14,8 +14,8 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class DemoUserContext {
 
-    public static final String APPLICANT_USERNAME = "demo1@growtea.co.jp";
-    public static final String APPROVER_USERNAME = "demo5@growtea.co.jp";
+    public static final String APPLICANT_USERNAME = "demo1@example.local";
+    public static final String APPROVER_USERNAME = "demo5@example.local";
     public static final String APPLICANT_EMPLOYEE_CODE = "1001";
     public static final String APPROVER_EMPLOYEE_CODE = "1005";
 

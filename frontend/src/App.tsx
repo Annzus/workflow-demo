@@ -1888,11 +1888,11 @@ function App() {
               <div className="compact-list">
                 <div className="compact-row">
                   <strong>申請者</strong>
-                  <span>demo1@growtea.co.jp / demo1001</span>
+                  <span>demo1@example.local / demo1001</span>
                 </div>
                 <div className="compact-row">
                   <strong>承認者</strong>
-                  <span>demo5@growtea.co.jp / demo1005</span>
+                  <span>demo5@example.local / demo1005</span>
                 </div>
                 <div className="compact-row">
                   <strong>API ドキュメント</strong>
